@@ -26,3 +26,21 @@ class League(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class ManagerLeaguePerformance(models.Model):
+    gameweek = models.IntegerField()
+    manager = models.ForeignKey(Manager, on_delete=models.PROTECT)
+    league = models.ForeignKey(League, on_delete=models.CASCADE)
+    score = models.IntegerField()
+
+    def __str__(self):
+        return '{manager} - {league} - {gamewweek}: {score}'.format(
+            manager=self.manager,
+            league=self.league,
+            gameweek=self.gameweek,
+            score=self.score
+        )
+
+    class Meta:
+        unique_together = ('gameweek', 'manager', 'league',)

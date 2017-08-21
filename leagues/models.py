@@ -14,11 +14,15 @@ class Manager(models.Model):
     user = models.OneToOneField(get_user_model(), on_delete=models.CASCADE)
     team_name = models.CharField(max_length=50)
 
+    def __str__(self):
+        self.team_name
+
 
 class League(models.Model):
     name = models.CharField(max_length=50)
     league_type = models.ForeignKey(LeagueType, on_delete=models.PROTECT)
     managers = models.ManyToManyField(Manager)
+    entry_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0)
 
     def __str__(self):
         return self.name

@@ -16,7 +16,7 @@ class Manager(models.Model):
     leagues_paid = models.ManyToManyField('League', blank=True)
 
     def __str__(self):
-        self.team_name
+        return self.team_name
 
 
 class League(models.Model):

@@ -21,7 +21,7 @@ class Manager(models.Model):
 class League(models.Model):
     name = models.CharField(max_length=50)
     league_type = models.ForeignKey(LeagueType, on_delete=models.CASCADE)
-    managers = models.ManyToManyField(Manager, blank=True, through='LeagueMembership')
+    managers = models.ManyToManyField(Manager, blank=True, through='LeagueEntrant')
     entry_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0)
 
     def __str__(self):
@@ -30,21 +30,21 @@ class League(models.Model):
 
 class Performance(models.Model):
     gameweek = models.IntegerField()
-    league_membership = models.ForeignKey('LeagueMembership', on_delete=models.CASCADE)
+    league_entrant = models.ForeignKey('LeagueEntrant', on_delete=models.CASCADE)
     score = models.IntegerField()
 
     def __str__(self):
-        return '{league_membership} - {gameweek}: {score}'.format(
-            league_membership=self.league_membership,
+        return '{league_entrant} - {gameweek}: {score}'.format(
+            league_entrant=self.league_entrant,
             gameweek=self.gameweek,
             score=self.score
         )
 
     class Meta:
-        unique_together = ('gameweek', 'league_membership')
+        unique_together = ('gameweek', 'league_entrant')
 
 
-class LeagueMembership(models.Model):
+class LeagueEntrant(models.Model):
     manager = models.ForeignKey(Manager, on_delete=models.CASCADE)
     league = models.ForeignKey(League, on_delete=models.CASCADE)
     paid_entry = models.BooleanField()

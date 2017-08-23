@@ -48,3 +48,9 @@ class LeagueMembership(models.Model):
     manager = models.ForeignKey(Manager, on_delete=models.CASCADE)
     league = models.ForeignKey(League, on_delete=models.CASCADE)
     paid_entry = models.BooleanField()
+
+    def __str__(self):
+        return '{league} - {manager}'.format(
+            league=self.league,
+            manager=self.manager
+        )

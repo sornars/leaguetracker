@@ -1,5 +1,5 @@
 from django.apps import AppConfig
 
 
-class FplConfig(AppConfig):
+class FPLConfig(AppConfig):
     name = 'fpl'

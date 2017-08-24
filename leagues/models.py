@@ -54,3 +54,6 @@ class LeagueEntrant(models.Model):
             league=self.league,
             manager=self.manager
         )
+
+    class Meta:
+        unique_together = ('manager', 'league')

@@ -2,9 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 
-from leagues.models import Manager
-
-from .models import League, LeagueType
+from .models import League, LeagueEntrant, LeagueType, Manager, Performance
 
 admin.site.register(League)
 admin.site.register(LeagueType)
@@ -23,3 +21,7 @@ class UserAdmin(BaseUserAdmin):
 
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
+
+admin.site.register(Manager)
+admin.site.register(Performance)
+admin.site.register(LeagueEntrant)

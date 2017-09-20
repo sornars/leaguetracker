@@ -5,13 +5,9 @@ from django.db import models
 
 class LeagueType(models.Model):
     name = models.CharField(max_length=50, unique=True)
-    provider = models.CharField(max_length=50)
 
     def __str__(self):
-        return '{provider} - {name}'.format(provider=self.provider, name=self.name)
-
-    class Meta:
-        unique_together = ('name', 'provider')
+        return self.name
 
 
 class League(models.Model):

@@ -3,16 +3,8 @@ from django.contrib.auth.models import User
 from django.db import models
 
 
-class LeagueType(models.Model):
-    name = models.CharField(max_length=50, unique=True)
-
-    def __str__(self):
-        return self.name
-
-
 class League(models.Model):
     name = models.CharField(max_length=50)
-    league_type = models.ForeignKey(LeagueType, on_delete=models.CASCADE)
     managers = models.ManyToManyField(User, blank=True, through='LeagueEntrant')
     entry_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0)
 

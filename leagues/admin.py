@@ -1,8 +1,8 @@
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.contrib.auth.models import User
 
-from .models import League, LeagueEntrant
+from .models import League, LeagueEntrant, PositionPayout, PeriodPayout
 
 admin.site.register(League)
 admin.site.register(LeagueEntrant)
+admin.site.register(PositionPayout)
+admin.site.register(PeriodPayout)

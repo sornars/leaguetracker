@@ -37,9 +37,12 @@ class Payout(models.Model):
     paid_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
-        return '{league} - {name}: {amount}'.format(
+        return '{league} - {name} Position {position} ({start_date}-{end_date}): {amount}'.format(
             league=self.league,
             name=self.name,
+            position=self.position,
+            start_date=self.start_date,
+            end_date=self.end_date,
             amount=self.amount
         )
 

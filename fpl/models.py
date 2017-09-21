@@ -1,6 +1,6 @@
 import requests
+from django.conf import settings
 from django.db import models
-from django.contrib.auth.models import User
 
 
 from leagues.models import League
@@ -11,7 +11,7 @@ BASE_URL = 'https://fantasy.premierleague.com/drf/'
 
 class ClassicLeague(models.Model):
     league = models.OneToOneField(League, on_delete=models.CASCADE)
-    fpl_league_id = models.IntegerField()
+    fpl_league_id = models.IntegerField(unique=True)
 
     def retrieve_league_data(self):
         response = requests.get(BASE_URL + 'leagues-classic-standings/' + str(self.fpl_league_id))
@@ -25,12 +25,11 @@ class ClassicLeague(models.Model):
                 }
             )
 
-
     def __str__(self):
         return self.league.name
 
 class Manager(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
     team_name = models.CharField(max_length=50)
     fpl_manager_id = models.IntegerField()
 

@@ -1,3 +1,6 @@
 from django.contrib import admin
 
-# Register your models here.
+from .models import Manager, ClassicLeague
+
+admin.site.register(Manager)
+admin.site.register(ClassicLeague)

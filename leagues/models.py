@@ -4,7 +4,7 @@ from django.db import models
 
 class League(models.Model):
     name = models.CharField(max_length=50)
-    managers = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, through='LeagueEntrant')
+    entrants = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, through='LeagueEntrant')
     entry_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0)
 
     def __str__(self):
@@ -12,7 +12,7 @@ class League(models.Model):
 
 
 class LeagueEntrant(models.Model):
-    manager = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    entrant = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     league = models.ForeignKey(League, on_delete=models.CASCADE)
     paid_entry = models.BooleanField()
 
@@ -23,7 +23,7 @@ class LeagueEntrant(models.Model):
         )
 
     class Meta:
-        unique_together = ('manager', 'league')
+        unique_together = ('entrant', 'league')
 
 
 class Payout(models.Model):

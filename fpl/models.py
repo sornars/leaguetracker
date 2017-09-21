@@ -1,6 +1,8 @@
+import datetime
 import requests
 from django.conf import settings
 from django.db import models
+from django.utils.dateparse import parse_datetime
 
 
 from leagues.models import League
@@ -35,3 +37,42 @@ class Manager(models.Model):
 
     def __str__(self):
         return '{team_name} - {user}'.format(team_name=self.team_name, user=self.user)
+
+
+class Gameweek(models.Model):
+    number = models.IntegerField(unique=True)
+    start_date = models.DateField()
+
+    @staticmethod
+    def retrieve_gameweek_data():
+        response = requests.get(BASE_URL + 'bootstrap-static')
+        data = response.json()
+        for event in data['events']:
+            Gameweek.objects.update_or_create(
+                number=event['id'],
+                defaults={
+                    'start_date': parse_datetime(event['deadline_time'])
+                }
+            )
+
+    def __str__(self):
+        return 'Gameweek {number} ({start_date})'.format(
+            number=self.number,
+            start_date=self.start_date
+        )
+
+
+class ManagerPerformance(models.Model):
+    manager = models.ForeignKey(Manager, on_delete=models.CASCADE)
+    gameweek = models.ForeignKey(Gameweek, on_delete=models.CASCADE)
+    score = models.IntegerField()
+
+    def __str__(self):
+        return '{manager} - {gameweek}: {score}'.format(
+            manager=self.manager,
+            gameweek=self.gameweek,
+            score=self.score
+        )
+
+    class Meta:
+        unique_together = ('manager', 'gameweek')

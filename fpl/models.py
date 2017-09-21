@@ -52,7 +52,7 @@ class Manager(models.Model):
                 manager=self,
                 gameweek=Gameweek.objects.get(number=gameweek['event']),
                 defaults={
-                    'score': gameweek['points']
+                    'score': gameweek['points'] - gameweek['event_transfers_cost']
                 }
             )
 

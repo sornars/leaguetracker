@@ -34,7 +34,7 @@ class Payout(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     paid_out = models.BooleanField()
-    paid_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    paid_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
         return '{league} - {name}: {amount}'.format(

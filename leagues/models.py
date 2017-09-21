@@ -1,13 +1,10 @@
-from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.db import models
-
-
-User = get_user_model()
 
 
 class League(models.Model):
     name = models.CharField(max_length=50)
-    managers = models.ManyToManyField(User, blank=True, through='LeagueEntrant')
+    managers = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, through='LeagueEntrant')
     entry_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0)
 
     def __str__(self):
@@ -15,7 +12,7 @@ class League(models.Model):
 
 
 class LeagueEntrant(models.Model):
-    manager = models.ForeignKey(User, on_delete=models.CASCADE)
+    manager = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     league = models.ForeignKey(League, on_delete=models.CASCADE)
     paid_entry = models.BooleanField()
 
@@ -34,7 +31,7 @@ class Payout(models.Model):
     name = models.CharField(max_length=50)
     amount = models.DecimalField(max_digits=8, decimal_places=2)
     paid_out = models.BooleanField()
-    paid_to = models.ForeignKey(User, on_delete=models.CASCADE)
+    paid_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
     def __str__(self):
         return '{league} - {name}: {amount}'.format(

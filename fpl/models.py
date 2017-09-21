@@ -16,16 +16,21 @@ class ClassicLeague(models.Model):
     fpl_league_id = models.IntegerField(unique=True)
 
     def retrieve_league_data(self):
-        response = requests.get(BASE_URL + 'leagues-classic-standings/' + str(self.fpl_league_id))
+        response = requests.get(
+            BASE_URL + 'leagues-classic-standings/{fpl_league_id}'.format(
+                fpl_league_id=self.fpl_league_id
+            )
+        )
         data = response.json()
         self.league.name = data['league']['name']
         for manager in data['standings']['results']:
-            Manager.objects.update_or_create(
+            manager, _ = Manager.objects.update_or_create(
                 fpl_manager_id=manager['entry'],
                 defaults={
                     'team_name': manager['entry_name']
                 }
             )
+            manager.retrieve_performance_data()
 
     def __str__(self):
         return self.league.name
@@ -34,6 +39,23 @@ class Manager(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
     team_name = models.CharField(max_length=50)
     fpl_manager_id = models.IntegerField()
+
+    def retrieve_performance_data(self):
+        response = requests.get(
+            BASE_URL + 'entry/{fpl_manager_id}/history'.format(
+                fpl_manager_id=self.fpl_manager_id
+            )
+        )
+        data = response.json()
+        for gameweek in data['history']:
+            manager_performance, _ = ManagerPerformance.objects.update_or_create(
+                manager=self,
+                gameweek=Gameweek.objects.get(number=gameweek['event']),
+                defaults={
+                    'score': gameweek['points']
+                }
+            )
+
 
     def __str__(self):
         return '{team_name} - {user}'.format(team_name=self.team_name, user=self.user)
@@ -48,7 +70,7 @@ class Gameweek(models.Model):
         response = requests.get(BASE_URL + 'bootstrap-static')
         data = response.json()
         for event in data['events']:
-            Gameweek.objects.update_or_create(
+            gameweek, _ = Gameweek.objects.update_or_create(
                 number=event['id'],
                 defaults={
                     'start_date': parse_datetime(event['deadline_time'])

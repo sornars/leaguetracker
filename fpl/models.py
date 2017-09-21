@@ -36,7 +36,7 @@ class ClassicLeague(models.Model):
         return self.league.name
 
 class Manager(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
+    entrant = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
     team_name = models.CharField(max_length=50)
     fpl_manager_id = models.IntegerField()
 
@@ -58,7 +58,7 @@ class Manager(models.Model):
 
 
     def __str__(self):
-        return '{team_name} - {user}'.format(team_name=self.team_name, user=self.user)
+        return '{team_name} - {entrant}'.format(team_name=self.team_name, user=self.entrant)
 
 
 class Gameweek(models.Model):

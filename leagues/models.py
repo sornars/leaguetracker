@@ -30,6 +30,9 @@ class Payout(models.Model):
     league = models.ForeignKey(League, on_delete=models.CASCADE)
     name = models.CharField(max_length=50)
     amount = models.DecimalField(max_digits=8, decimal_places=2)
+    position = models.IntegerField()
+    start_date = models.DateField()
+    end_date = models.DateField()
     paid_out = models.BooleanField()
     paid_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
@@ -41,18 +44,4 @@ class Payout(models.Model):
         )
 
     class Meta:
-        abstract = True
-
-class PeriodPayout(Payout):
-    start_date = models.DateField()
-    end_date = models.DateField()
-
-    class Meta:
-        unique_together = ('league', 'name', 'start_date', 'end_date')
-
-
-class PositionPayout(Payout):
-    position = models.IntegerField()
-
-    class Meta:
-        unique_together = ('league', 'name', 'position')
+        unique_together = ('league', 'name', 'position', 'start_date', 'end_date')

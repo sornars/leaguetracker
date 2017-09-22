@@ -33,8 +33,8 @@ class Payout(models.Model):
     position = models.IntegerField()
     start_date = models.DateField()
     end_date = models.DateField()
+    winner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
     paid_out = models.BooleanField()
-    paid_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
         return '{league} - {name} Position {position} ({start_date}-{end_date}): {amount}'.format(

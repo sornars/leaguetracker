@@ -23,6 +23,7 @@ class ClassicLeague(models.Model):
         )
         data = response.json()
         self.league.name = data['league']['name']
+        self.league.save()
         for manager in data['standings']['results']:
             manager, _ = Manager.objects.update_or_create(
                 fpl_manager_id=manager['entry'],
@@ -58,7 +59,7 @@ class Manager(models.Model):
 
 
     def __str__(self):
-        return '{team_name} - {entrant}'.format(team_name=self.team_name, user=self.entrant)
+        return '{team_name} - {entrant}'.format(team_name=self.team_name, entrant=self.entrant)
 
 
 class Gameweek(models.Model):

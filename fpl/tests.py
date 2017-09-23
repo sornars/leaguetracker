@@ -1,10 +1,10 @@
-from unittest.mock import patch, Mock
-
-from django.test import TestCase
+from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
+from django.test import TestCase
+
+from fpl.models import ClassicLeague, Gameweek, Manager, ManagerPerformance
 from leagues.models import League, LeagueEntrant
-from fpl.models import ClassicLeague, Manager, Gameweek, ManagerPerformance
 
 
 class ClassicLeagueTestCase(TestCase):
@@ -68,4 +68,50 @@ class ClassicLeagueTestCase(TestCase):
 
 
 class ManagerTestCase(TestCase):
-    pass
+
+    def setUp(self):
+        User = get_user_model()
+        entrant_1 = User.objects.create(username='entrant_1')
+        manager_1 = Manager.objects.create(entrant=entrant_1, team_name='Team 1', fpl_manager_id=1)
+        gameweek_1 = Gameweek.objects.create(number=1, start_date='2017-08-01')
+        gameweek_2 = Gameweek.objects.create(number=2, start_date='2017-08-08')
+        ManagerPerformance.objects.create(manager=manager_1, gameweek=gameweek_1, score=0)
+
+    @patch('fpl.models.requests.get')
+    def test_retrieve_performance_data(self, mock_requests_get):
+        performance_data = {
+            'history': [
+                {
+                    'event': 1,
+                    'points': 10,
+                    'event_transfers_cost': 0
+                },
+                {
+                    'event': 2,
+                    'points': 10,
+                    'event_transfers_cost': 8
+                }
+            ]
+        }
+        mock_response = Mock()
+        mock_response.json.return_value = performance_data
+        mock_requests_get.return_value = mock_response
+
+        manager = Manager.objects.get()
+        manager.retrieve_performance_data()
+
+
+        self.assertEqual(
+            ManagerPerformance.objects.get(
+                manager=manager,
+                gameweek=Gameweek.objects.get(number=1)
+            ).score,
+            10
+        )
+        self.assertEqual(
+            ManagerPerformance.objects.get(
+                manager=manager,
+                gameweek=Gameweek.objects.get(number=2)
+            ).score,
+            2
+        )

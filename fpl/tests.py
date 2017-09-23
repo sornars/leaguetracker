@@ -1,3 +1,4 @@
+import datetime
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
@@ -100,7 +101,7 @@ class ManagerTestCase(TestCase):
         manager = Manager.objects.get()
         manager.retrieve_performance_data()
 
-
+        self.assertEqual(ManagerPerformance.objects.count(), 2)
         self.assertEqual(
             ManagerPerformance.objects.get(
                 manager=manager,
@@ -115,3 +116,33 @@ class ManagerTestCase(TestCase):
             ).score,
             2
         )
+
+
+class GameweekTestCase(TestCase):
+
+    def setUp(self):
+        Gameweek.objects.create(number=1, start_date='2017-08-01')
+
+    @patch('fpl.models.requests.get')
+    def test_retrieve_gameweek_data(self, mock_requests_get):
+        gameweek_data = {
+            'events': [
+                {
+                    'id': 1,
+                    'deadline_time': '2017-08-11T17:45:00Z'
+                },
+                {
+                    'id': 2,
+                    'deadline_time': '2017-08-18T17:45:00Z'
+                }
+            ]
+        }
+        mock_response = Mock()
+        mock_response.json.return_value = gameweek_data
+        mock_requests_get.return_value = mock_response
+
+        Gameweek.retrieve_gameweek_data()
+
+        self.assertEqual(Gameweek.objects.count(), 2)
+        self.assertEqual(Gameweek.objects.get(number=1).start_date, datetime.date(2017, 8, 11))
+        self.assertEqual(Gameweek.objects.get(number=2).start_date, datetime.date(2017, 8, 18))

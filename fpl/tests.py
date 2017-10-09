@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from fpl.models import ClassicLeague, Gameweek, Manager, ManagerPerformance
+from fpl.models import ClassicLeague, Gameweek, Manager, ManagerPerformance, Payout
 from leagues.models import League, LeagueEntrant
 
 
@@ -146,3 +146,43 @@ class GameweekTestCase(TestCase):
         self.assertEqual(Gameweek.objects.count(), 2)
         self.assertEqual(Gameweek.objects.get(number=1).start_date, datetime.date(2017, 8, 11))
         self.assertEqual(Gameweek.objects.get(number=2).start_date, datetime.date(2017, 8, 18))
+
+
+class PayoutTestCase(TestCase):
+
+    def test_calulate_winner(self):
+        User = get_user_model()
+        entrant_1 = User.objects.create(username='entrant_1')
+        entrant_2 = User.objects.create(username='entrant_2')
+        entrant_3 = User.objects.create(username='entrant_3')
+        league = League.objects.create(name='Test League', entry_fee=10)
+        LeagueEntrant.objects.bulk_create([
+            LeagueEntrant(entrant=entrant_1, league=league, paid_entry=True),
+            LeagueEntrant(entrant=entrant_2, league=league, paid_entry=True),
+            LeagueEntrant(entrant=entrant_3, league=league, paid_entry=True)
+        ])
+        manager_1 = Manager.objects.create(entrant=entrant_1, team_name='Team 1', fpl_manager_id=1)
+        manager_2 = Manager.objects.create(entrant=entrant_2, team_name='Team 2', fpl_manager_id=2)
+        manager_3 = Manager.objects.create(entrant=entrant_3, team_name='Team 3', fpl_manager_id=3)
+        gameweek_1 = Gameweek.objects.create(number=1, start_date='2017-08-01')
+        gameweek_2 = Gameweek.objects.create(number=2, start_date='2017-08-08')
+        ManagerPerformance.objects.bulk_create([
+            ManagerPerformance(manager=manager_1, gameweek=gameweek_1, score=0),
+            ManagerPerformance(manager=manager_2, gameweek=gameweek_1, score=10),
+            ManagerPerformance(manager=manager_3, gameweek=gameweek_1, score=0),
+            ManagerPerformance(manager=manager_1, gameweek=gameweek_2, score=0),
+            ManagerPerformance(manager=manager_2, gameweek=gameweek_2, score=10),
+            ManagerPerformance(manager=manager_3, gameweek=gameweek_2, score=30)
+        ])
+        payout = Payout.objects.create(
+            league=league,
+            name='Test Payout',
+            amount=10,
+            position=1,
+            start_date='2017-08-01',
+            end_date='2017-08-31',
+            paid_out=False
+        )
+        payout.calculate_winner()
+
+        self.assertEqual(payout.winner, entrant_3)

@@ -36,6 +36,9 @@ class Payout(models.Model):
     winner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
     paid_out = models.BooleanField()
 
+    def calculate_winner(self):
+        raise NotImplementedError
+
     def __str__(self):
         return '{league} - {name} Position {position} ({start_date}-{end_date}): {amount}'.format(
             league=self.league,
@@ -47,4 +50,4 @@ class Payout(models.Model):
         )
 
     class Meta:
-        unique_together = ('league', 'name', 'position', 'start_date', 'end_date')
+        unique_together = ('league', 'position', 'start_date', 'end_date')

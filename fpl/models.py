@@ -5,7 +5,7 @@ from django.db import models
 from django.utils.dateparse import parse_datetime
 
 
-from leagues.models import League
+from leagues.models import League, Payout as LeaguePayout
 
 
 BASE_URL = 'https://fantasy.premierleague.com/drf/'
@@ -99,3 +99,19 @@ class ManagerPerformance(models.Model):
 
     class Meta:
         unique_together = ('manager', 'gameweek')
+
+class Payout(LeaguePayout):
+
+    def calculate_winner(self):
+        managers = Manager.objects.filter(
+            entrant__league=self.league,
+            managerperformance__gameweek__start_date__range=[self.start_date, self.end_date]
+        ).annotate(
+            score=models.Sum('managerperformance__score')
+        ).order_by('-score')
+
+        self.winner = managers[0].entrant
+        self.save()
+
+    class Meta:
+        proxy = True

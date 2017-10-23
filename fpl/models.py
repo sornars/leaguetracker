@@ -1,12 +1,10 @@
-import datetime
 import requests
+import decimal
 from django.conf import settings
 from django.db import models
 from django.utils.dateparse import parse_datetime
 
-
 from leagues.models import League, Payout as LeaguePayout
-
 
 BASE_URL = 'https://fantasy.premierleague.com/drf/'
 
@@ -100,6 +98,7 @@ class ManagerPerformance(models.Model):
     class Meta:
         unique_together = ('manager', 'gameweek')
 
+
 class Payout(LeaguePayout):
 
     def calculate_winner(self):
@@ -108,10 +107,34 @@ class Payout(LeaguePayout):
             managerperformance__gameweek__start_date__range=[self.start_date, self.end_date]
         ).annotate(
             score=models.Sum('managerperformance__score')
-        ).order_by('-score')
+        ).order_by(
+            '-score'
+        )
+        # TODO: Move processing to DB with a window function in Django 2.0
+        current_rank = {
+            'rank': 0,
+            'score': None
+        }
+        for manager in managers:
+            if manager.score != current_rank['score']:
+                current_rank['rank'] += 1
+                current_rank['score'] = manager.score
 
-        self.winner = managers[0].entrant
+            manager.rank = current_rank['rank']
+
+        winning_managers = [manager for manager in managers if manager.rank == self.position]
+        adjusted_payout = round(decimal.Decimal(self.amount) / decimal.Decimal(len(winning_managers)), 2)
+        remainder = self.amount - (adjusted_payout * len(winning_managers))
+        self.amount = float(adjusted_payout + remainder)
+        self.winner = winning_managers[0].entrant
         self.save()
+
+        for winning_manager in winning_managers[1:]:
+            self.pk = None
+            self.winner = winning_manager.entrant
+            self.save()
+
+
 
     class Meta:
         proxy = True

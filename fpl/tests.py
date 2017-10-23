@@ -150,32 +150,36 @@ class GameweekTestCase(TestCase):
 
 class PayoutTestCase(TestCase):
 
-    def test_calulate_winner(self):
+    def setUp(self):
         User = get_user_model()
-        entrant_1 = User.objects.create(username='entrant_1')
-        entrant_2 = User.objects.create(username='entrant_2')
-        entrant_3 = User.objects.create(username='entrant_3')
-        league = League.objects.create(name='Test League', entry_fee=10)
+        self.entrant_1 = User.objects.create(username='entrant_1')
+        self.entrant_2 = User.objects.create(username='entrant_2')
+        self.entrant_3 = User.objects.create(username='entrant_3')
+        self.league = League.objects.create(name='Test League', entry_fee=10)
         LeagueEntrant.objects.bulk_create([
-            LeagueEntrant(entrant=entrant_1, league=league, paid_entry=True),
-            LeagueEntrant(entrant=entrant_2, league=league, paid_entry=True),
-            LeagueEntrant(entrant=entrant_3, league=league, paid_entry=True)
+            LeagueEntrant(entrant=self.entrant_1, league=self.league, paid_entry=True),
+            LeagueEntrant(entrant=self.entrant_2, league=self.league, paid_entry=True),
+            LeagueEntrant(entrant=self.entrant_3, league=self.league, paid_entry=True)
         ])
-        manager_1 = Manager.objects.create(entrant=entrant_1, team_name='Team 1', fpl_manager_id=1)
-        manager_2 = Manager.objects.create(entrant=entrant_2, team_name='Team 2', fpl_manager_id=2)
-        manager_3 = Manager.objects.create(entrant=entrant_3, team_name='Team 3', fpl_manager_id=3)
+        self.manager_1 = Manager.objects.create(entrant=self.entrant_1, team_name='Team 1', fpl_manager_id=1)
+        self.manager_2 = Manager.objects.create(entrant=self.entrant_2, team_name='Team 2', fpl_manager_id=2)
+        self.manager_3 = Manager.objects.create(entrant=self.entrant_3, team_name='Team 3', fpl_manager_id=3)
         gameweek_1 = Gameweek.objects.create(number=1, start_date='2017-08-01')
         gameweek_2 = Gameweek.objects.create(number=2, start_date='2017-08-08')
         ManagerPerformance.objects.bulk_create([
-            ManagerPerformance(manager=manager_1, gameweek=gameweek_1, score=0),
-            ManagerPerformance(manager=manager_2, gameweek=gameweek_1, score=10),
-            ManagerPerformance(manager=manager_3, gameweek=gameweek_1, score=0),
-            ManagerPerformance(manager=manager_1, gameweek=gameweek_2, score=0),
-            ManagerPerformance(manager=manager_2, gameweek=gameweek_2, score=10),
-            ManagerPerformance(manager=manager_3, gameweek=gameweek_2, score=30)
+            ManagerPerformance(manager=self.manager_1, gameweek=gameweek_1, score=0),
+            ManagerPerformance(manager=self.manager_2, gameweek=gameweek_1, score=10),
+            ManagerPerformance(manager=self.manager_3, gameweek=gameweek_1, score=0),
+            ManagerPerformance(manager=self.manager_1, gameweek=gameweek_2, score=0),
+            ManagerPerformance(manager=self.manager_2, gameweek=gameweek_2, score=10),
+            ManagerPerformance(manager=self.manager_3, gameweek=gameweek_2, score=30)
         ])
+
+
+    def test_calculate_winner_single_winner(self):
+
         payout = Payout.objects.create(
-            league=league,
+            league=self.league,
             name='Test Payout',
             amount=10,
             position=1,
@@ -185,4 +189,25 @@ class PayoutTestCase(TestCase):
         )
         payout.calculate_winner()
 
-        self.assertEqual(payout.winner, entrant_3)
+        self.assertEqual(payout.winner, self.entrant_3)
+
+    def test_calculate_winner_single_winner_tie_with_no_future_payout(self):
+        payout = Payout.objects.create(
+            league=self.league,
+            name='Test Payout',
+            amount=10,
+            position=1,
+            start_date='2017-08-01',
+            end_date='2017-08-31',
+            paid_out=False
+        )
+        gameweek_3 = Gameweek.objects.create(number=3, start_date='2017-08-15')
+        ManagerPerformance.objects.bulk_create([
+            ManagerPerformance(manager=self.manager_1, gameweek=gameweek_3, score=30),
+            ManagerPerformance(manager=self.manager_2, gameweek=gameweek_3, score=10),
+            ManagerPerformance(manager=self.manager_3, gameweek=gameweek_3, score=0)
+        ])
+
+        payout.calculate_winner()
+        self.assertEqual(Payout.objects.count(), 3)
+        self.assertEqual(payout.amount, 3.34)

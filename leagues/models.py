@@ -50,4 +50,4 @@ class Payout(models.Model):
         )
 
     class Meta:
-        unique_together = ('league', 'position', 'start_date', 'end_date')
+        unique_together = ('league', 'position', 'start_date', 'end_date', 'winner')

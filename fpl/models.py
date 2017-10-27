@@ -1,7 +1,9 @@
-import requests
 import decimal
+import itertools
+
+import requests
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.utils.dateparse import parse_datetime
 
 from leagues.models import League, Payout as LeaguePayout
@@ -34,6 +36,7 @@ class ClassicLeague(models.Model):
     def __str__(self):
         return self.league.name
 
+
 class Manager(models.Model):
     entrant = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
     team_name = models.CharField(max_length=50)
@@ -54,7 +57,6 @@ class Manager(models.Model):
                     'score': gameweek['points'] - gameweek['event_transfers_cost']
                 }
             )
-
 
     def __str__(self):
         return '{team_name} - {entrant}'.format(team_name=self.team_name, entrant=self.entrant)
@@ -100,7 +102,7 @@ class ManagerPerformance(models.Model):
 
 
 class Payout(LeaguePayout):
-
+    @transaction.atomic
     def calculate_winner(self):
         managers = Manager.objects.filter(
             entrant__league=self.league,
@@ -122,19 +124,48 @@ class Payout(LeaguePayout):
 
             manager.rank = current_rank['rank']
 
-        winning_managers = [manager for manager in managers if manager.rank == self.position]
-        adjusted_payout = round(decimal.Decimal(self.amount) / decimal.Decimal(len(winning_managers)), 2)
-        remainder = self.amount - (adjusted_payout * len(winning_managers))
-        self.amount = float(adjusted_payout + remainder)
-        self.winner = winning_managers[0].entrant
-        self.save()
+        related_payouts = Payout.objects.filter(
+            league=self.league,
+            start_date=self.start_date,
+            end_date=self.end_date
+        ).exclude(
+            position=self.position
+        ).order_by(
+            'position'
+        )
 
-        for winning_manager in winning_managers[1:]:
-            self.pk = None
-            self.winner = winning_manager.entrant
+        for payout in itertools.chain(related_payouts, [self]):
+            payout.winning_managers = [manager for manager in managers if manager.rank == payout.position]
+            if len(payout.winning_managers) > 1 and related_payouts:
+                raise NotImplementedError(
+                    'Payouts with multiple positions involving ties must be manually resolved'
+                )
+
+        future_payouts = Payout.objects.filter(
+            league=self.league,
+            position=self.position,
+            start_date__gt=self.end_date
+        ).order_by(
+            'start_date'
+        )
+
+        if len(self.winning_managers) > 1 and future_payouts:
+            next_payment = future_payouts[0]
+            next_payment.amount = models.F('amount') + self.amount
+            next_payment.save()
+            self.delete()
+        else:
+            adjusted_payout = round(decimal.Decimal(self.amount) / decimal.Decimal(len(self.winning_managers)), 2)
+            remainder = self.amount - (adjusted_payout * len(self.winning_managers))
+            self.amount = adjusted_payout + remainder
+            self.winner = self.winning_managers[0].entrant
             self.save()
 
-
+            for winning_manager in self.winning_managers[1:]:
+                self.pk = None
+                self.amount = adjusted_payout
+                self.winner = winning_manager.entrant
+                self.save()
 
     class Meta:
         proxy = True

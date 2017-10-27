@@ -1,4 +1,5 @@
 import datetime
+import decimal
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
@@ -175,10 +176,8 @@ class PayoutTestCase(TestCase):
             ManagerPerformance(manager=self.manager_3, gameweek=gameweek_2, score=30)
         ])
 
-
     def test_calculate_winner_single_winner(self):
-
-        payout = Payout.objects.create(
+        payout_1 = Payout.objects.create(
             league=self.league,
             name='Test Payout',
             amount=10,
@@ -187,9 +186,18 @@ class PayoutTestCase(TestCase):
             end_date='2017-08-31',
             paid_out=False
         )
-        payout.calculate_winner()
+        Payout.objects.create(
+            league=self.league,
+            name='Test Payout',
+            amount=10,
+            position=1,
+            start_date='2017-09-01',
+            end_date='2017-09-30',
+            paid_out=False
+        )
+        payout_1.calculate_winner()
 
-        self.assertEqual(payout.winner, self.entrant_3)
+        self.assertEqual(payout_1.winner, self.entrant_3)
 
     def test_calculate_winner_single_winner_tie_with_no_future_payout(self):
         payout = Payout.objects.create(
@@ -209,5 +217,76 @@ class PayoutTestCase(TestCase):
         ])
 
         payout.calculate_winner()
+
+        payout_1, payout_2, payout_3 = Payout.objects.all()
+
         self.assertEqual(Payout.objects.count(), 3)
-        self.assertEqual(payout.amount, 3.34)
+        self.assertEqual(payout_1.amount, decimal.Decimal('3.34'))
+        self.assertEqual(payout_2.amount, decimal.Decimal('3.33'))
+        self.assertEqual(payout_3.amount, decimal.Decimal('3.33'))
+
+    def test_calculate_single_winner_tie_with_future_payout(self):
+        payout_1 = Payout.objects.create(
+            league=self.league,
+            name='Test Payout 1',
+            amount=10,
+            position=1,
+            start_date='2017-08-01',
+            end_date='2017-08-31',
+            paid_out=False
+        )
+        Payout.objects.create(
+            league=self.league,
+            name='Test Payout 2',
+            amount=10,
+            position=1,
+            start_date='2017-09-01',
+            end_date='2017-09-30',
+            paid_out=False
+        )
+
+        gameweek_3 = Gameweek.objects.create(number=3, start_date='2017-08-15')
+        ManagerPerformance.objects.bulk_create([
+            ManagerPerformance(manager=self.manager_1, gameweek=gameweek_3, score=30),
+            ManagerPerformance(manager=self.manager_2, gameweek=gameweek_3, score=10),
+            ManagerPerformance(manager=self.manager_3, gameweek=gameweek_3, score=0)
+        ])
+
+        payout_1.calculate_winner()
+
+        self.assertEqual(Payout.objects.count(), 1)
+        payout = Payout.objects.get()
+        self.assertEqual(payout.amount, 20)
+
+    def test_calculate_multiple_positions_tie(self):
+        payout_1 = Payout.objects.create(
+            league=self.league,
+            name='Test Payout 1',
+            amount=10,
+            position=1,
+            start_date='2017-08-01',
+            end_date='2017-08-31',
+            paid_out=False
+        )
+        payout_2 = Payout.objects.create(
+            league=self.league,
+            name='Test Payout 2',
+            amount=10,
+            position=2,
+            start_date='2017-08-01',
+            end_date='2017-08-31',
+            paid_out=False
+        )
+
+        gameweek_3 = Gameweek.objects.create(number=3, start_date='2017-08-15')
+        ManagerPerformance.objects.bulk_create([
+            ManagerPerformance(manager=self.manager_1, gameweek=gameweek_3, score=20),
+            ManagerPerformance(manager=self.manager_2, gameweek=gameweek_3, score=0),
+            ManagerPerformance(manager=self.manager_3, gameweek=gameweek_3, score=0)
+        ])
+
+        with self.assertRaises(NotImplementedError):
+            payout_1.calculate_winner()
+
+        with self.assertRaises(NotImplementedError):
+            payout_2.calculate_winner()

@@ -11,9 +11,19 @@ from leagues.models import League, Payout as LeaguePayout
 BASE_URL = 'https://fantasy.premierleague.com/drf/'
 
 
-class ClassicLeague(models.Model):
+class FPLLeague(models.Model):
     league = models.OneToOneField(League, on_delete=models.CASCADE)
     fpl_league_id = models.IntegerField(unique=True)
+
+    def retrieve_league_data(self):
+        raise NotImplementedError
+
+    def __str__(self):
+        return self.league.name
+
+
+class ClassicLeague(models.Model):
+    fpl_league = models.OneToOneField(FPLLeague, on_delete=models.CASCADE)
 
     def retrieve_league_data(self):
         response = requests.get(
@@ -22,8 +32,8 @@ class ClassicLeague(models.Model):
             )
         )
         data = response.json()
-        self.league.name = data['league']['name']
-        self.league.save()
+        self.fpl_league.league.name = data['league']['name']
+        self.fpl_league.league.save()
         for manager in data['standings']['results']:
             manager, _ = Manager.objects.update_or_create(
                 fpl_manager_id=manager['entry'],
@@ -33,8 +43,42 @@ class ClassicLeague(models.Model):
             )
             manager.retrieve_performance_data()
 
-    def __str__(self):
-        return self.league.name
+
+class HeadToHeadLeague(models.Model):
+    fpl_league = models.OneToOneField(FPLLeague, on_delete=models.CASCADE)
+
+    # TODO: Remove redundancy with ClassicLeague
+    def retrieve_league_data(self):
+        response = requests.get(
+            BASE_URL + 'leagues-h2h-standings/{fpl_league_id}'.format(
+                fpl_league_id=self.fpl_league_id
+            )
+        )
+        data = response.json()
+        self.fpl_league.league.name = data['league']['name']
+        self.fpl_league.league.save()
+        for manager in data['standings']['results']:
+            manager, _ = Manager.objects.update_or_create(
+                fpl_manager_id=manager['entry'],
+                defaults={
+                    'team_name': manager['entry_name']
+                }
+            )
+            manager.retrieve_performance_data()
+
+        for match in itertools.chain(
+                data['matches_this']['results'], data['matches_next']['results']
+        ):
+            manager_1 = Manager.objects.get(fpl_manager_id=match['entry_1_entry'])
+            manager_2 = Manager.objects.get(fpl_manager_id=match['entry_2_entry'])
+            h2h_match, _ = HeadToHeadMatch.objects.update_or_create(
+                fpl_match_id=match['id'],
+                h2h_league=self,
+                gameweek=Gameweek.objects.get(number=match['event'])
+            )
+            h2h_match.participants.add(manager_1, manager_2)
+            h2h_match.save()
+            h2h_match.calculate_score()
 
 
 class Manager(models.Model):
@@ -99,6 +143,26 @@ class ManagerPerformance(models.Model):
 
     class Meta:
         unique_together = ('manager', 'gameweek')
+
+
+class HeadToHeadMatch(models.Model):
+    fpl_match_id = models.IntegerField(unique=True)
+    h2h_league = models.ForeignKey(HeadToHeadLeague, on_delete=models.CASCADE)
+    gameweek = models.ForeignKey(Gameweek, on_delete=models.CASCADE)
+    participants = models.ManyToManyField(Manager)
+
+    def calculate_score(self):
+        raise NotImplementedError
+
+
+class HeadToHeadPerformance(models.Model):
+    league = models.ForeignKey(HeadToHeadLeague, on_delete=models.CASCADE)
+    manager = models.ForeignKey(Manager, on_delete=models.CASCADE)
+    gameweek = models.ForeignKey(Gameweek, on_delete=models.CASCADE)
+    score = models.IntegerField()
+
+    class Meta:
+        unique_together = ('league', 'manager', 'gameweek')
 
 
 class Payout(LeaguePayout):

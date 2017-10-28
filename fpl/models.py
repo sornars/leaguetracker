@@ -84,7 +84,7 @@ class HeadToHeadLeague(models.Model):
 class Manager(models.Model):
     entrant = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
     team_name = models.CharField(max_length=50)
-    fpl_manager_id = models.IntegerField()
+    fpl_manager_id = models.IntegerField(unique=True)
 
     def retrieve_performance_data(self):
         response = requests.get(
@@ -151,18 +151,44 @@ class HeadToHeadMatch(models.Model):
     gameweek = models.ForeignKey(Gameweek, on_delete=models.CASCADE)
     participants = models.ManyToManyField(Manager)
 
+    @transaction.atomic
     def calculate_score(self):
-        raise NotImplementedError
+        # Assumes only two participants in a HeadToHeadMatch
+        manager_1, manager_2 = self.participants.all().filter(managerperformance__gameweek=self.gameweek).annotate(
+            score=models.Sum('managerperformance__score'))
+
+        if manager_1.score == manager_2.score:
+            manager_1_score = 1
+            manager_2_score = 1
+        elif manager_1.score > manager_2.score:
+            manager_1_score = 3
+            manager_2_score = 0
+        else:
+            manager_1_score = 0
+            manager_2_score = 3
+
+        HeadToHeadPerformance.objects.update_or_create(h2h_league=self.h2h_league,
+                                                       manager=manager_1,
+                                                       gameweek=self.gameweek,
+                                                       defaults={
+                                                           'score': manager_1_score
+                                                       })
+        HeadToHeadPerformance.objects.update_or_create(h2h_league=self.h2h_league,
+                                                       manager=manager_2,
+                                                       gameweek=self.gameweek,
+                                                       defaults={
+                                                           'score': manager_2_score
+                                                       })
 
 
 class HeadToHeadPerformance(models.Model):
-    league = models.ForeignKey(HeadToHeadLeague, on_delete=models.CASCADE)
+    h2h_league = models.ForeignKey(HeadToHeadLeague, on_delete=models.CASCADE)
     manager = models.ForeignKey(Manager, on_delete=models.CASCADE)
     gameweek = models.ForeignKey(Gameweek, on_delete=models.CASCADE)
     score = models.IntegerField()
 
     class Meta:
-        unique_together = ('league', 'manager', 'gameweek')
+        unique_together = ('h2h_league', 'manager', 'gameweek')
 
 
 class Payout(LeaguePayout):

@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from fpl.models import (FPLLeague, ClassicLeague, HeadToHeadLeague, HeadToHeadMatch, Gameweek,
+from fpl.models import (FPLLeague, ClassicLeague, HeadToHeadLeague, HeadToHeadMatch, HeadToHeadPerformance, Gameweek,
                         Manager, ManagerPerformance, Payout)
 from leagues.models import League, LeagueEntrant
 
@@ -177,6 +177,36 @@ class HeadToHeadLeagueTestCase(TestCase):
         self.assertEqual(League.objects.get().name, 'Test League 1')
         self.assertEqual(HeadToHeadMatch.objects.count(), 3)
 
+
+class HeadToHeadMatchTestCase(TestCase):
+    def test_calculate_score(self):
+        User = get_user_model()
+        entrant_1 = User.objects.create(username='entrant_1')
+        entrant_2 = User.objects.create(username='entrant_2')
+        league = League.objects.create(name='Test League', entry_fee=10)
+        LeagueEntrant.objects.bulk_create([
+            LeagueEntrant(entrant=entrant_1, league=league, paid_entry=True),
+            LeagueEntrant(entrant=entrant_2, league=league, paid_entry=True)
+        ])
+        fpl_league = FPLLeague.objects.create(league=league, fpl_league_id=1)
+        h2h_league = HeadToHeadLeague.objects.create(fpl_league=fpl_league)
+        manager_1 = Manager.objects.create(entrant=entrant_1, team_name='Team 1', fpl_manager_id=1)
+        manager_2 = Manager.objects.create(entrant=entrant_2, team_name='Team 2', fpl_manager_id=2)
+        gameweek = Gameweek.objects.create(number=1, start_date='2017-08-01')
+        ManagerPerformance.objects.create(manager=manager_1, gameweek=gameweek, score=0)
+        ManagerPerformance.objects.create(manager=manager_2, gameweek=gameweek, score=10)
+
+        h2h_match = HeadToHeadMatch.objects.create(fpl_match_id=1, h2h_league=h2h_league, gameweek=gameweek)
+        h2h_match.participants.add(manager_1, manager_2)
+        h2h_match.save()
+        h2h_match.calculate_score()
+        self.assertEqual(HeadToHeadPerformance.objects.count(), 2)
+        manager_1_h2h_performance = HeadToHeadPerformance.objects.get(manager=manager_1, gameweek=gameweek,
+                                                                      h2h_league=h2h_league)
+        manager_2_h2h_performance = HeadToHeadPerformance.objects.get(manager=manager_2, gameweek=gameweek,
+                                                                      h2h_league=h2h_league)
+        self.assertEqual(manager_1_h2h_performance.score, 0)
+        self.assertEqual(manager_2_h2h_performance.score, 3)
 
 
 class ManagerTestCase(TestCase):

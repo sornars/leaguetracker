@@ -191,7 +191,7 @@ class HeadToHeadPerformance(models.Model):
         unique_together = ('h2h_league', 'manager', 'gameweek')
 
 
-class Payout(LeaguePayout):
+class ClassicPayout(LeaguePayout):
     @transaction.atomic
     def calculate_winner(self):
         managers = Manager.objects.filter(
@@ -214,7 +214,7 @@ class Payout(LeaguePayout):
 
             manager.rank = current_rank['rank']
 
-        related_payouts = Payout.objects.filter(
+        related_payouts = ClassicPayout.objects.filter(
             league=self.league,
             start_date=self.start_date,
             end_date=self.end_date
@@ -231,7 +231,78 @@ class Payout(LeaguePayout):
                     'Payouts with multiple positions involving ties must be manually resolved'
                 )
 
-        future_payouts = Payout.objects.filter(
+        future_payouts = ClassicPayout.objects.filter(
+            league=self.league,
+            position=self.position,
+            start_date__gt=self.end_date
+        ).order_by(
+            'start_date'
+        )
+
+        if len(self.winning_managers) > 1 and future_payouts:
+            next_payment = future_payouts[0]
+            next_payment.amount = models.F('amount') + self.amount
+            next_payment.save()
+            self.delete()
+        else:
+            adjusted_payout = round(decimal.Decimal(self.amount) / decimal.Decimal(len(self.winning_managers)), 2)
+            remainder = self.amount - (adjusted_payout * len(self.winning_managers))
+            self.amount = adjusted_payout + remainder
+            self.winner = self.winning_managers[0].entrant
+            self.save()
+
+            for winning_manager in self.winning_managers[1:]:
+                self.pk = None
+                self.amount = adjusted_payout
+                self.winner = winning_manager.entrant
+                self.save()
+
+    class Meta:
+        proxy = True
+
+
+class HeadToHeadPayout(LeaguePayout):
+    @transaction.atomic
+    def calculate_winner(self):
+        # TODO: Remove Redundancy with ClassicPayout
+        managers = Manager.objects.filter(
+            entrant__league=self.league,
+            headtoheadperformance__gameweek__start_date__range=[self.start_date, self.end_date]
+        ).annotate(
+            score=models.Sum('headtoheadperformance__score')
+        ).order_by(
+            '-score'
+        )
+        # TODO: Move processing to DB with a window function in Django 2.0
+        current_rank = {
+            'rank': 0,
+            'score': None
+        }
+        for manager in managers:
+            if manager.score != current_rank['score']:
+                current_rank['rank'] += 1
+                current_rank['score'] = manager.score
+
+            manager.rank = current_rank['rank']
+
+        related_payouts = HeadToHeadPayout.objects.filter(
+            league=self.league,
+            start_date=self.start_date,
+            end_date=self.end_date
+        ).exclude(
+            position=self.position
+        ).order_by(
+            'position'
+        )
+
+        for payout in itertools.chain(related_payouts, [self]):
+            payout.winning_managers = [manager for manager in managers if manager.rank == payout.position]
+            if len(payout.winning_managers) > 1 and related_payouts:
+                raise NotImplementedError(
+                    'Payouts with multiple positions involving ties must be manually resolved'
+                )
+
+        future_payouts = HeadToHeadPayout.objects.filter(
             league=self.league,
             position=self.position,
             start_date__gt=self.end_date

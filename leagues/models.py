@@ -17,9 +17,9 @@ class LeagueEntrant(models.Model):
     paid_entry = models.BooleanField()
 
     def __str__(self):
-        return '{league} - {manager}'.format(
+        return '{league} - {entrant}'.format(
             league=self.league,
-            manager=self.manager
+            entrant=self.entrant
         )
 
     class Meta:

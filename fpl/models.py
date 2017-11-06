@@ -1,3 +1,4 @@
+import datetime
 import decimal
 import itertools
 
@@ -6,7 +7,7 @@ from django.conf import settings
 from django.db import models, transaction
 from django.utils.dateparse import parse_datetime
 
-from leagues.models import League, Payout as LeaguePayout
+from leagues.models import League, Payout
 
 BASE_URL = 'https://fantasy.premierleague.com/drf/'
 
@@ -18,6 +19,39 @@ class FPLLeague(models.Model):
     def retrieve_league_data(self):
         raise NotImplementedError
 
+    def process_payouts(self):
+        # TODO: Leverage RelatedObjectDoesNotExist
+        classic_leagues = ClassicLeague.objects.filter(fpl_league=self)
+        h2h_leagues = HeadToHeadLeague.objects.filter(fpl_league=self)
+        finalised_payouts = []
+        if classic_leagues:
+            classic_league = classic_leagues.get()
+            classic_league.retrieve_league_data()
+            finalised_payouts = ClassicPayout.objects.filter(league=self.league,
+                                                             end_date__lt=datetime.date.today() - datetime.timedelta(
+                                                                 days=7)).order_by('start_date', 'end_date')
+        elif h2h_leagues:
+            h2h_league = h2h_leagues.get()
+            h2h_league.retrieve_league_data()
+            finalised_payouts = HeadToHeadPayout.objects.filter(league=self.league,
+                                                                end_date__lt=datetime.date.today() - datetime.timedelta(
+                                                                    days=7)).order_by('start_date', 'end_date')
+        for fp in finalised_payouts:
+            fp.refresh_from_db()
+            fp.calculate_winner()
+
+    @staticmethod
+    def get_authorized_session():
+        # TODO: Cache cookies
+        session = requests.Session()
+        session.get('https://fantasy.premierleague.com')
+        session.post('https://users.premierleague.com/accounts/login/',
+                     data={'csrfmiddlewaretoken': session.cookies['csrftoken'], 'login': settings.FPL_USERNAME,
+                           'password': settings.FPL_PASSWORD, 'app': 'plfpl-web',
+                           'redirect_uri': 'https://fantasy.premierleague.com/a/login'})
+
+        return session
+
     def __str__(self):
         return self.league.name
 
@@ -28,7 +62,7 @@ class ClassicLeague(models.Model):
     def retrieve_league_data(self):
         response = requests.get(
             BASE_URL + 'leagues-classic-standings/{fpl_league_id}'.format(
-                fpl_league_id=self.fpl_league_id
+                fpl_league_id=self.fpl_league.fpl_league_id
             )
         )
         data = response.json()
@@ -48,16 +82,34 @@ class HeadToHeadLeague(models.Model):
     fpl_league = models.OneToOneField(FPLLeague, on_delete=models.CASCADE)
 
     # TODO: Remove redundancy with ClassicLeague
+    # TODO: Split into atomic sub functions
+    @transaction.atomic
     def retrieve_league_data(self):
-        response = requests.get(
-            BASE_URL + 'leagues-h2h-standings/{fpl_league_id}'.format(
-                fpl_league_id=self.fpl_league_id
+        data = {
+            'matches': {
+                'results': []
+            }
+        }
+        has_next = True
+        page_number = 1
+        session = self.fpl_league.get_authorized_session()
+        while has_next:
+            response = session.get(
+                BASE_URL + 'leagues-entries-and-h2h-matches/league/{fpl_league_id}?page={page_number}'.format(
+                    fpl_league_id=self.fpl_league.fpl_league_id,
+                    page_number=page_number
+                )
             )
-        )
-        data = response.json()
+            new_data = response.json()
+            data['league'] = new_data['league']
+            data['league-entries'] = new_data['league-entries']
+            data['matches']['results'] = data['matches']['results'] + new_data['matches']['results']
+            page_number += 1
+            has_next = new_data['matches']['has_next']
+
         self.fpl_league.league.name = data['league']['name']
         self.fpl_league.league.save()
-        for manager in data['standings']['results']:
+        for manager in data['league-entries']:
             manager, _ = Manager.objects.update_or_create(
                 fpl_manager_id=manager['entry'],
                 defaults={
@@ -66,9 +118,7 @@ class HeadToHeadLeague(models.Model):
             )
             manager.retrieve_performance_data()
 
-        for match in itertools.chain(
-                data['matches_this']['results'], data['matches_next']['results']
-        ):
+        for match in data['matches']['results']:
             manager_1 = Manager.objects.get(fpl_manager_id=match['entry_1_entry'])
             manager_2 = Manager.objects.get(fpl_manager_id=match['entry_2_entry'])
             h2h_match, _ = HeadToHeadMatch.objects.update_or_create(
@@ -78,6 +128,19 @@ class HeadToHeadLeague(models.Model):
             )
             h2h_match.participants.add(manager_1, manager_2)
             h2h_match.save()
+            ManagerPerformance.objects.update_or_create(manager=manager_1, gameweek=h2h_match.gameweek,
+                                                        score=match['entry_1_points'])
+            ManagerPerformance.objects.update_or_create(manager=manager_2, gameweek=h2h_match.gameweek,
+                                                        score=match['entry_2_points'])
+
+        # TODO: Fix redundant query/iteration
+        most_recent_gameweek = Gameweek.objects.annotate(
+            days_passed=models.ExpressionWrapper(
+                models.F('start_date') - (datetime.date.today() - datetime.timedelta(days=7)),
+                output_field=models.IntegerField())).filter(
+            days_passed__lte=0).aggregate(models.Max('number'))['number__max']
+        completed_h2h_matches = HeadToHeadMatch.objects.filter(gameweek__number__lte=most_recent_gameweek)
+        for h2h_match in completed_h2h_matches:
             h2h_match.calculate_score()
 
 
@@ -191,7 +254,7 @@ class HeadToHeadPerformance(models.Model):
         unique_together = ('h2h_league', 'manager', 'gameweek')
 
 
-class ClassicPayout(LeaguePayout):
+class ClassicPayout(Payout):
     @transaction.atomic
     def calculate_winner(self):
         managers = Manager.objects.filter(
@@ -202,6 +265,10 @@ class ClassicPayout(LeaguePayout):
         ).order_by(
             '-score'
         )
+
+        if not managers:
+            raise ValueError('Cannot calculate payout without participating managers')
+
         # TODO: Move processing to DB with a window function in Django 2.0
         current_rank = {
             'rank': 0,
@@ -261,10 +328,11 @@ class ClassicPayout(LeaguePayout):
         proxy = True
 
 
-class HeadToHeadPayout(LeaguePayout):
+class HeadToHeadPayout(Payout):
     @transaction.atomic
     def calculate_winner(self):
         # TODO: Remove Redundancy with ClassicPayout
+        # TODO: Improve speed
         managers = Manager.objects.filter(
             entrant__league=self.league,
             headtoheadperformance__gameweek__start_date__range=[self.start_date, self.end_date]
@@ -273,6 +341,10 @@ class HeadToHeadPayout(LeaguePayout):
         ).order_by(
             '-score'
         )
+
+        if not managers:
+            raise ValueError('Cannot calculate payout without participating managers')
+
         # TODO: Move processing to DB with a window function in Django 2.0
         current_rank = {
             'rank': 0,

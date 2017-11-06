@@ -11,7 +11,7 @@ from leagues.models import League, LeagueEntrant
 
 
 class FPLLeagueTestCase(TestCase):
-    def test_retrieve_league_data(self):
+    def setUp(self):
         User = get_user_model()
         entrant_1 = User.objects.create(username='entrant_1')
         entrant_2 = User.objects.create(username='entrant_2')
@@ -22,10 +22,11 @@ class FPLLeagueTestCase(TestCase):
             LeagueEntrant(entrant=entrant_2, league=league, paid_entry=True),
             LeagueEntrant(entrant=entrant_3, league=league, paid_entry=True)
         ])
-        fpl_league = FPLLeague.objects.create(league=league, fpl_league_id=1)
+        self.fpl_league = FPLLeague.objects.create(league=league, fpl_league_id=1)
 
+    def test_retrieve_league_data(self):
         with self.assertRaises(NotImplementedError):
-            fpl_league.retrieve_league_data()
+            self.fpl_league.retrieve_league_data()
 
 
 class ClassicLeagueTestCase(TestCase):
@@ -91,8 +92,8 @@ class ClassicLeagueTestCase(TestCase):
 class HeadToHeadLeagueTestCase(TestCase):
     @patch('fpl.models.HeadToHeadMatch.calculate_score')
     @patch('fpl.models.Manager.retrieve_performance_data')
-    @patch('fpl.models.requests.get')
-    def test_retrieve_league_data(self, mock_requests_get, *_):
+    @patch('fpl.models.FPLLeague.get_authorized_session')
+    def test_retrieve_league_data(self, mock_get_authorized_session, *_):
         User = get_user_model()
         entrant_1 = User.objects.create(username='entrant_1')
         entrant_2 = User.objects.create(username='entrant_2')
@@ -117,65 +118,60 @@ class HeadToHeadLeagueTestCase(TestCase):
             'league': {
                 'name': 'Test League 1'
             },
-            'standings': {
-                'results': [
-                    {
-                        'entry': 1,
-                        'entry_name': 'Test Manager Team'
-                    },
-                    {
-                        'entry': 2,
-                        'entry_name': 'Team 2'
-                    },
-                    {
-                        'entry': 3,
-                        'entry_name': 'Team 3'
-                    },
-                    {
-                        'entry': 4,
-                        'entry_name': 'Team 4'
-                    },
-                ]
-            },
-            'matches_this': {
-                'results': [
-                    {
-                        'id': 1,
-                        'event': 1,
-                        'entry_1_entry': 1,
-                        'entry_2_entry': 2
-                    },
-                    {
-                        'id': 2,
-                        'event': 2,
-                        'entry_1_entry': 1,
-                        'entry_2_entry': 3
-                    }
-                ]
-            },
-            'matches_next': {
+            'league-entries': [
+                {
+                    'entry': 1,
+                    'entry_name': 'Test Manager Team'
+                },
+                {
+                    'entry': 2,
+                    'entry_name': 'Team 2'
+                },
+                {
+                    'entry': 3,
+                    'entry_name': 'Team 3'
+                },
+                {
+                    'entry': 4,
+                    'entry_name': 'Team 4'
+                },
+            ],
+            'matches': {
+                'has_next': False,
                 'results': [
                     {
                         'id': 3,
                         'event': 3,
                         'entry_1_entry': 1,
-                        'entry_2_entry': 4
+                        'entry_1_points': 10,
+                        'entry_2_entry': 4,
+                        'entry_2_points': 20
+                    },
+                    {
+                        'id': 4,
+                        'event': 3,
+                        'entry_1_entry': 2,
+                        'entry_1_points': 10,
+                        'entry_2_entry': 3,
+                        'entry_2_points': 20
                     }
                 ]
 
             }
         }
+
         mock_response = Mock()
         mock_response.json.return_value = league_data
-        mock_requests_get.return_value = mock_response
-
+        mock_session = Mock()
+        mock_session.get.return_value = mock_response
+        mock_get_authorized_session.return_value = mock_session
         h2h_league = HeadToHeadLeague.objects.get()
         h2h_league.retrieve_league_data()
 
         self.assertEqual(Manager.objects.count(), 4)
         self.assertEqual(Manager.objects.get(fpl_manager_id=1).team_name, 'Test Manager Team')
         self.assertEqual(League.objects.get().name, 'Test League 1')
-        self.assertEqual(HeadToHeadMatch.objects.count(), 3)
+        self.assertEqual(HeadToHeadMatch.objects.count(), 2)
 
 
 class HeadToHeadMatchTestCase(TestCase):

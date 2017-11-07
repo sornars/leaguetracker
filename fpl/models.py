@@ -20,22 +20,21 @@ class FPLLeague(models.Model):
         raise NotImplementedError
 
     def process_payouts(self):
-        # TODO: Leverage RelatedObjectDoesNotExist
-        classic_leagues = ClassicLeague.objects.filter(fpl_league=self)
-        h2h_leagues = HeadToHeadLeague.objects.filter(fpl_league=self)
+        payout_proxy = None
+        if ClassicLeague.objects.filter(fpl_league=self).exists():
+            self.classicleague.retrieve_league_data()
+            payout_proxy = ClassicPayout
+        elif HeadToHeadLeague.objects.filter(fpl_league=self).exists():
+            self.headtoheadleague.retrieve_league_data()
+            payout_proxy = HeadToHeadPayout
+
         finalised_payouts = []
-        if classic_leagues:
-            classic_league = classic_leagues.get()
-            classic_league.retrieve_league_data()
-            finalised_payouts = ClassicPayout.objects.filter(league=self.league,
-                                                             end_date__lt=datetime.date.today() - datetime.timedelta(
-                                                                 days=7)).order_by('start_date', 'end_date')
-        elif h2h_leagues:
-            h2h_league = h2h_leagues.get()
-            h2h_league.retrieve_league_data()
-            finalised_payouts = HeadToHeadPayout.objects.filter(league=self.league,
-                                                                end_date__lt=datetime.date.today() - datetime.timedelta(
-                                                                    days=7)).order_by('start_date', 'end_date')
+        if payout_proxy:
+            finalised_payouts = payout_proxy.objects.filter(league=self.league,
+                                                            end_date__lt=datetime.date.today() - datetime.timedelta(
+                                                                days=7)).order_by('start_date',
+                                                                                  'end_date')
+
         for fp in finalised_payouts:
             fp.refresh_from_db()
             fp.calculate_winner()
@@ -81,8 +80,6 @@ class ClassicLeague(models.Model):
 class HeadToHeadLeague(models.Model):
     fpl_league = models.OneToOneField(FPLLeague, on_delete=models.CASCADE)
 
-    # TODO: Remove redundancy with ClassicLeague
-    # TODO: Split into atomic sub functions
     @transaction.atomic
     def retrieve_league_data(self):
         data = {
@@ -254,18 +251,8 @@ class HeadToHeadPerformance(models.Model):
         unique_together = ('h2h_league', 'manager', 'gameweek')
 
 
-class ClassicPayout(Payout):
-    @transaction.atomic
-    def calculate_winner(self):
-        managers = Manager.objects.filter(
-            entrant__league=self.league,
-            managerperformance__gameweek__start_date__range=[self.start_date, self.end_date]
-        ).annotate(
-            score=models.Sum('managerperformance__score')
-        ).order_by(
-            '-score'
-        )
-
+class FPLPayout(Payout):
+    def _calculate_winner(self, managers):
         if not managers:
             raise ValueError('Cannot calculate payout without participating managers')
 
@@ -281,7 +268,7 @@ class ClassicPayout(Payout):
 
             manager.rank = current_rank['rank']
 
-        related_payouts = ClassicPayout.objects.filter(
+        related_payouts = Payout.objects.filter(
             league=self.league,
             start_date=self.start_date,
             end_date=self.end_date
@@ -298,7 +285,7 @@ class ClassicPayout(Payout):
                     'Payouts with multiple positions involving ties must be manually resolved'
                 )
 
-        future_payouts = ClassicPayout.objects.filter(
+        future_payouts = Payout.objects.filter(
             league=self.league,
             position=self.position,
             start_date__gt=self.end_date
@@ -328,10 +315,27 @@ class ClassicPayout(Payout):
         proxy = True
 
 
-class HeadToHeadPayout(Payout):
+class ClassicPayout(FPLPayout):
     @transaction.atomic
     def calculate_winner(self):
-        # TODO: Remove Redundancy with ClassicPayout
+        managers = Manager.objects.filter(
+            entrant__league=self.league,
+            managerperformance__gameweek__start_date__range=[self.start_date, self.end_date]
+        ).annotate(
+            score=models.Sum('managerperformance__score')
+        ).order_by(
+            '-score'
+        )
+
+        self._calculate_winner(managers)
+
+    class Meta:
+        proxy = True
+
+
+class HeadToHeadPayout(FPLPayout):
+    @transaction.atomic
+    def calculate_winner(self):
         # TODO: Improve speed
         managers = Manager.objects.filter(
             entrant__league=self.league,
@@ -342,63 +346,7 @@ class HeadToHeadPayout(Payout):
             '-score'
         )
 
-        if not managers:
-            raise ValueError('Cannot calculate payout without participating managers')
-
-        # TODO: Move processing to DB with a window function in Django 2.0
-        current_rank = {
-            'rank': 0,
-            'score': None
-        }
-        for manager in managers:
-            if manager.score != current_rank['score']:
-                current_rank['rank'] += 1
-                current_rank['score'] = manager.score
-
-            manager.rank = current_rank['rank']
-
-        related_payouts = HeadToHeadPayout.objects.filter(
-            league=self.league,
-            start_date=self.start_date,
-            end_date=self.end_date
-        ).exclude(
-            position=self.position
-        ).order_by(
-            'position'
-        )
-
-        for payout in itertools.chain(related_payouts, [self]):
-            payout.winning_managers = [manager for manager in managers if manager.rank == payout.position]
-            if len(payout.winning_managers) > 1 and related_payouts:
-                raise NotImplementedError(
-                    'Payouts with multiple positions involving ties must be manually resolved'
-                )
-
-        future_payouts = HeadToHeadPayout.objects.filter(
-            league=self.league,
-            position=self.position,
-            start_date__gt=self.end_date
-        ).order_by(
-            'start_date'
-        )
-
-        if len(self.winning_managers) > 1 and future_payouts:
-            next_payment = future_payouts[0]
-            next_payment.amount = models.F('amount') + self.amount
-            next_payment.save()
-            self.delete()
-        else:
-            adjusted_payout = round(decimal.Decimal(self.amount) / decimal.Decimal(len(self.winning_managers)), 2)
-            remainder = self.amount - (adjusted_payout * len(self.winning_managers))
-            self.amount = adjusted_payout + remainder
-            self.winner = self.winning_managers[0].entrant
-            self.save()
-
-            for winning_manager in self.winning_managers[1:]:
-                self.pk = None
-                self.amount = adjusted_payout
-                self.winner = winning_manager.entrant
-                self.save()
+        self._calculate_winner(managers)
 
     class Meta:
         proxy = True

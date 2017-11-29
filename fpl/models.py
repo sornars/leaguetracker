@@ -19,21 +19,17 @@ class FPLLeague(models.Model):
     def retrieve_league_data(self):
         raise NotImplementedError
 
-    def process_payouts(self):
-        payout_proxy = None
-        if ClassicLeague.objects.filter(fpl_league=self).exists():
-            self.classicleague.retrieve_league_data()
-            payout_proxy = ClassicPayout
-        elif HeadToHeadLeague.objects.filter(fpl_league=self).exists():
-            self.headtoheadleague.retrieve_league_data()
-            payout_proxy = HeadToHeadPayout
+    def _process_payouts(self, payout_proxy):
+        self.retrieve_league_data()
 
-        finalised_payouts = []
-        if payout_proxy:
-            finalised_payouts = payout_proxy.objects.filter(league=self.league,
-                                                            end_date__lt=datetime.date.today() - datetime.timedelta(
-                                                                days=7)).order_by('start_date',
-                                                                                  'end_date')
+        most_recent_gameweek_id = Gameweek.objects.filter(
+            end_date__lte=datetime.date.today()
+        ).aggregate(models.Max('number'))['number__max']
+        most_recent_gameweek = Gameweek.objects.filter(number=most_recent_gameweek_id).get()
+        finalised_payouts = payout_proxy.objects.filter(
+            league=self.league,
+            end_date__lte=most_recent_gameweek.end_date
+        ).order_by('start_date', 'end_date')
 
         for fp in finalised_payouts:
             fp.refresh_from_db()
@@ -54,19 +50,24 @@ class FPLLeague(models.Model):
     def __str__(self):
         return self.league.name
 
+    class Meta:
+        abstract = True
 
-class ClassicLeague(models.Model):
-    fpl_league = models.OneToOneField(FPLLeague, on_delete=models.CASCADE)
+
+class ClassicLeague(FPLLeague):
+
+    def process_payouts(self):
+        self._process_payouts(ClassicPayout)
 
     def retrieve_league_data(self):
         response = requests.get(
             BASE_URL + 'leagues-classic-standings/{fpl_league_id}'.format(
-                fpl_league_id=self.fpl_league.fpl_league_id
+                fpl_league_id=self.fpl_league_id
             )
         )
         data = response.json()
-        self.fpl_league.league.name = data['league']['name']
-        self.fpl_league.league.save()
+        self.league.name = data['league']['name']
+        self.league.save()
         for manager in data['standings']['results']:
             manager, _ = Manager.objects.update_or_create(
                 fpl_manager_id=manager['entry'],
@@ -77,8 +78,9 @@ class ClassicLeague(models.Model):
             manager.retrieve_performance_data()
 
 
-class HeadToHeadLeague(models.Model):
-    fpl_league = models.OneToOneField(FPLLeague, on_delete=models.CASCADE)
+class HeadToHeadLeague(FPLLeague):
+    def process_payouts(self):
+        self._process_payouts(HeadToHeadPayout)
 
     @transaction.atomic
     def retrieve_league_data(self):
@@ -89,11 +91,11 @@ class HeadToHeadLeague(models.Model):
         }
         has_next = True
         page_number = 1
-        session = self.fpl_league.get_authorized_session()
+        session = self.get_authorized_session()
         while has_next:
             response = session.get(
                 BASE_URL + 'leagues-entries-and-h2h-matches/league/{fpl_league_id}?page={page_number}'.format(
-                    fpl_league_id=self.fpl_league.fpl_league_id,
+                    fpl_league_id=self.fpl_league_id,
                     page_number=page_number
                 )
             )
@@ -104,8 +106,8 @@ class HeadToHeadLeague(models.Model):
             page_number += 1
             has_next = new_data['matches']['has_next']
 
-        self.fpl_league.league.name = data['league']['name']
-        self.fpl_league.league.save()
+        self.league.name = data['league']['name']
+        self.league.save()
         for manager in data['league-entries']:
             manager, _ = Manager.objects.update_or_create(
                 fpl_manager_id=manager['entry'],
@@ -131,11 +133,9 @@ class HeadToHeadLeague(models.Model):
                                                         score=match['entry_2_points'])
 
         # TODO: Fix redundant query/iteration
-        most_recent_gameweek = Gameweek.objects.annotate(
-            days_passed=models.ExpressionWrapper(
-                models.F('start_date') - (datetime.date.today() - datetime.timedelta(days=7)),
-                output_field=models.IntegerField())).filter(
-            days_passed__lte=0).aggregate(models.Max('number'))['number__max']
+        most_recent_gameweek = Gameweek.objects.filter(
+            end_date__lte=datetime.date.today()
+        ).aggregate(models.Max('number'))['number__max']
         completed_h2h_matches = HeadToHeadMatch.objects.filter(gameweek__number__lte=most_recent_gameweek)
         for h2h_match in completed_h2h_matches:
             h2h_match.calculate_score()
@@ -169,16 +169,27 @@ class Manager(models.Model):
 class Gameweek(models.Model):
     number = models.IntegerField(unique=True)
     start_date = models.DateField()
+    end_date = models.DateField()
 
     @staticmethod
     def retrieve_gameweek_data():
+        fixtures_response = requests.get(BASE_URL + 'fixtures')
+        fixtures = fixtures_response.json()
+        gameweek_end_dates = {}
+        for fixture in fixtures:
+            end_date = parse_datetime(fixture['kickoff_time']) + datetime.timedelta(days=1)
+            gameweek = fixture['event']
+            if end_date >= gameweek_end_dates.get(gameweek, end_date):
+                gameweek_end_dates[gameweek] = end_date
+
         response = requests.get(BASE_URL + 'bootstrap-static')
         data = response.json()
         for event in data['events']:
             gameweek, _ = Gameweek.objects.update_or_create(
                 number=event['id'],
                 defaults={
-                    'start_date': parse_datetime(event['deadline_time'])
+                    'start_date': parse_datetime(event['deadline_time']),
+                    'end_date': gameweek_end_dates[event['id']]
                 }
             )
 
@@ -295,6 +306,7 @@ class FPLPayout(Payout):
 
         if len(self.winning_managers) > 1 and future_payouts:
             next_payment = future_payouts[0]
+            next_payment.start_date = self.start_date
             next_payment.amount = models.F('amount') + self.amount
             next_payment.save()
             self.delete()

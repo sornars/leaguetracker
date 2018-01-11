@@ -55,7 +55,6 @@ class FPLLeague(models.Model):
 
 
 class ClassicLeague(FPLLeague):
-
     def process_payouts(self):
         self._process_payouts(ClassicPayout)
 
@@ -123,10 +122,10 @@ class HeadToHeadLeague(FPLLeague):
             h2h_match, _ = HeadToHeadMatch.objects.update_or_create(
                 fpl_match_id=match['id'],
                 h2h_league=self,
-                gameweek=Gameweek.objects.get(number=match['event'])
+                gameweek=Gameweek.objects.get(number=match['event']),
+                manager_1=manager_1,
+                manager_2=manager_2
             )
-            h2h_match.participants.add(manager_1, manager_2)
-            h2h_match.save()
             ManagerPerformance.objects.update_or_create(manager=manager_1, gameweek=h2h_match.gameweek,
                                                         score=match['entry_1_points'])
             ManagerPerformance.objects.update_or_create(manager=manager_2, gameweek=h2h_match.gameweek,
@@ -220,18 +219,18 @@ class HeadToHeadMatch(models.Model):
     fpl_match_id = models.IntegerField(unique=True)
     h2h_league = models.ForeignKey(HeadToHeadLeague, on_delete=models.CASCADE)
     gameweek = models.ForeignKey(Gameweek, on_delete=models.CASCADE)
-    participants = models.ManyToManyField(Manager)
+    manager_1 = models.ForeignKey(Manager, on_delete=models.CASCADE, related_name='+')
+    manager_2 = models.ForeignKey(Manager, on_delete=models.CASCADE, related_name='+')
 
     @transaction.atomic
     def calculate_score(self):
-        # Assumes only two participants in a HeadToHeadMatch
-        manager_1, manager_2 = self.participants.all().filter(managerperformance__gameweek=self.gameweek).annotate(
-            score=models.Sum('managerperformance__score'))
+        manager_1_performance = ManagerPerformance.objects.get(manager=self.manager_1, gameweek=self.gameweek).score
+        manager_2_performance = ManagerPerformance.objects.get(manager=self.manager_2, gameweek=self.gameweek).score
 
-        if manager_1.score == manager_2.score:
+        if manager_1_performance == manager_2_performance:
             manager_1_score = 1
             manager_2_score = 1
-        elif manager_1.score > manager_2.score:
+        elif manager_1_performance > manager_2_performance:
             manager_1_score = 3
             manager_2_score = 0
         else:
@@ -239,13 +238,13 @@ class HeadToHeadMatch(models.Model):
             manager_2_score = 3
 
         HeadToHeadPerformance.objects.update_or_create(h2h_league=self.h2h_league,
-                                                       manager=manager_1,
+                                                       manager=self.manager_1,
                                                        gameweek=self.gameweek,
                                                        defaults={
                                                            'score': manager_1_score
                                                        })
         HeadToHeadPerformance.objects.update_or_create(h2h_league=self.h2h_league,
-                                                       manager=manager_2,
+                                                       manager=self.manager_2,
                                                        gameweek=self.gameweek,
                                                        defaults={
                                                            'score': manager_2_score
@@ -301,7 +300,7 @@ class FPLPayout(Payout):
             position=self.position,
             start_date__gt=self.end_date
         ).order_by(
-            'start_date'
+            'start_date', 'end_date'
         )
 
         if len(self.winning_managers) > 1 and future_payouts:

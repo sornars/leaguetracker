@@ -7,8 +7,8 @@
         <tr>
             <th>Team</th>
             <th>Manager</th>
+            <th>Entry Paid</th>
             <th>Score</th>
-            <th>Paid?</th>
         </tr>
         </thead>
         <tbody>
@@ -21,11 +21,16 @@
                 <td>
                     {{ entrant.manager.entrant.first_name }} {{ entrant.manager.entrant.last_name }}
                 </td>
-                <td>{{ entrant.score }}</td>
                 <td>{{ entrant.paid_entry }}</td>
+                <td>{{ entrant.score }}</td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
     <h3>Last Updated: {{ object.last_updated }}</h3>
+    <form action="{% url 'fpl:classic-league:refresh-data' object.pk %}" method="post">
+        {% csrf_token %}
+        <input type="submit" value="Refresh League Data"/>
+    </form>
+
 {% endblock %}

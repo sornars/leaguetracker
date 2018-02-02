@@ -6,6 +6,8 @@ import requests
 from django.conf import settings
 from django.db import models, transaction
 from django.utils.dateparse import parse_datetime
+from django.utils import timezone
+
 
 from leagues.models import League, Payout
 
@@ -15,6 +17,17 @@ BASE_URL = 'https://fantasy.premierleague.com/drf/'
 class FPLLeague(models.Model):
     league = models.OneToOneField(League, on_delete=models.CASCADE)
     fpl_league_id = models.IntegerField(unique=True)
+    last_updated = models.DateTimeField(null=True)
+
+    @staticmethod
+    def update_last_updated(func):
+        def func_wrapper(self):
+            output = func(self)
+            self.last_updated = timezone.now()
+            self.save()
+            return output
+
+        return func_wrapper
 
     def retrieve_league_data(self):
         raise NotImplementedError
@@ -58,6 +71,7 @@ class ClassicLeague(FPLLeague):
     def process_payouts(self):
         self._process_payouts(ClassicPayout)
 
+    @FPLLeague.update_last_updated
     def retrieve_league_data(self):
         response = requests.get(
             BASE_URL + 'leagues-classic-standings/{fpl_league_id}'.format(
@@ -81,7 +95,9 @@ class HeadToHeadLeague(FPLLeague):
     def process_payouts(self):
         self._process_payouts(HeadToHeadPayout)
 
+
     @transaction.atomic
+    @FPLLeague.update_last_updated
     def retrieve_league_data(self):
         data = {
             'matches': {

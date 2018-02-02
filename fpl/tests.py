@@ -67,6 +67,8 @@ class ClassicLeagueTestCase(TestCase):
         self.assertEqual(Manager.objects.count(), 4)
         self.assertEqual(Manager.objects.get(fpl_manager_id=1).team_name, 'Test Manager Team')
         self.assertEqual(League.objects.get().name, 'Test League 1')
+        self.assertIsNotNone(classic_league.last_updated)
+
 
     @patch('fpl.models.ClassicLeague.retrieve_league_data')
     def test_process_payouts(self, _):
@@ -215,6 +217,7 @@ class HeadToHeadLeagueTestCase(TestCase):
         self.assertEqual(Manager.objects.get(fpl_manager_id=1).team_name, 'Test Manager Team')
         self.assertEqual(League.objects.get().name, 'Test League 1')
         self.assertEqual(HeadToHeadMatch.objects.count(), 2)
+        self.assertIsNotNone(h2h_league.last_updated)
 
     @patch('fpl.models.HeadToHeadLeague.retrieve_league_data')
     def test_process_payouts(self, _):

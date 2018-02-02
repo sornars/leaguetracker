@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>Classic Leagues</h2>
+    <ul>
+        {% for classic_league in object_list %}
+            <li>
+                <a href="{% url 'fpl:classic-league:detail' classic_league.pk %}">
+                    {{ classic_league.league.name }}
+                </a>
+            </li>
+        {% endfor %}
+    </ul>
+{% endblock %}

@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h2>Classic League: {{ object.league.name }}</h2>
+    <h2>Classic League: {{ classic_league.league.name }}</h2>
     <table>
         <thead>
         <tr>
@@ -12,25 +12,53 @@
         </tr>
         </thead>
         <tbody>
-        {% for entrant in object.entrants %}
+        {% for manager in classic_league.managers %}
             <tr>
 
                 <td>
-                    <a href="https://fantasy.premierleague.com/a/team/{{ entrant.manager.fpl_manager_id }}">{{ entrant.manager.team_name }}</a>
+                    <a href="https://fantasy.premierleague.com/a/team/{{ manager.fpl_manager_id }}">{{ manager.team_name }}</a>
                 </td>
                 <td>
-                    {{ entrant.manager.entrant.first_name }} {{ entrant.manager.entrant.last_name }}
+                    {{ manager.entrant.first_name }} {{ manager.entrant.last_name }}
                 </td>
-                <td>{{ entrant.paid_entry }}</td>
-                <td>{{ entrant.score }}</td>
+                <td>{{ manager.paid_entry }}</td>
+                <td>{{ manager.current_score }}</td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
-    <h3>Last Updated: {{ object.last_updated }}</h3>
-    <form action="{% url 'fpl:classic-league:refresh-data' object.pk %}" method="post">
+    <h3>Payouts: </h3>
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Position</th>
+            <th>Start Date</th>
+            <th>End Date</th>
+            <th>Amount</th>
+            <th>Winner</th>
+            <th>Paid Out</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for payout in classic_league.league.payout_set.all|dictsort:"position"|dictsort:"start_date"|dictsort:"name" %}
+            <tr>
+                <td>{{ payout.name }}</td>
+                <td>{{ payout.position }}</td>
+                <td>{{ payout.start_date }}</td>
+                <td>{{ payout.end_date }}</td>
+                <td>{{ payout.amount }}</td>
+                <td>{{ payout.winner.first_name }} {{ payout.winner.last_name }}</td>
+                <td>{{ payout.paid_out }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>Last Updated: {{ classic_league.last_updated }}</h3>
+    <form action="{% url 'fpl:classic-league:process-payouts' classic_league.pk %}" method="post">
         {% csrf_token %}
-        <input type="submit" value="Refresh League Data"/>
+        <input type="submit" value="Refresh League Data and Process Payouts"/>
     </form>
 
 {% endblock %}

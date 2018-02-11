@@ -5,11 +5,11 @@ import itertools
 import requests
 from django.conf import settings
 from django.db import models, transaction
-from django.utils.dateparse import parse_datetime
+from django.db.models import Sum, F
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
-
-from leagues.models import League, Payout
+from leagues.models import League, Payout, LeagueEntrant
 
 BASE_URL = 'https://fantasy.premierleague.com/drf/'
 
@@ -18,6 +18,15 @@ class FPLLeague(models.Model):
     league = models.OneToOneField(League, on_delete=models.CASCADE)
     fpl_league_id = models.IntegerField(unique=True)
     last_updated = models.DateTimeField(null=True)
+
+    @property
+    def managers(self):
+        managers = Manager.objects.filter(
+            entrant__leagueentrant__league=self.league
+        ).annotate(current_score=Sum('managerperformance__score'),
+                   paid_entry=F('entrant__leagueentrant__paid_entry')).order_by('-current_score')
+
+        return managers
 
     @staticmethod
     def update_last_updated(func):
@@ -39,14 +48,15 @@ class FPLLeague(models.Model):
             end_date__lte=datetime.date.today()
         ).aggregate(models.Max('number'))['number__max']
         most_recent_gameweek = Gameweek.objects.filter(number=most_recent_gameweek_id).get()
-        finalised_payouts = payout_proxy.objects.filter(
+        unfinalised_payouts = payout_proxy.objects.filter(
             league=self.league,
-            end_date__lte=most_recent_gameweek.end_date
+            end_date__lte=most_recent_gameweek.end_date,
+            paid_out=False
         ).order_by('start_date', 'end_date')
 
-        for fp in finalised_payouts:
-            fp.refresh_from_db()
-            fp.calculate_winner()
+        for payout in unfinalised_payouts:
+            payout.refresh_from_db()
+            payout.calculate_winner()
 
     @staticmethod
     def get_authorized_session():
@@ -92,9 +102,22 @@ class ClassicLeague(FPLLeague):
 
 
 class HeadToHeadLeague(FPLLeague):
+
+    @property
+    def managers(self):
+        managers = super().managers
+        # Can't use annotate again due to https://code.djangoproject.com/ticket/10060
+        for manager in managers:
+            manager.current_h2h_score = HeadToHeadPerformance.objects.filter(
+                manager=manager
+            ).aggregate(
+                current_h2h_score=Sum('score')
+            )['current_h2h_score']
+        managers = sorted(managers, key=lambda x: x.current_h2h_score, reverse=True)
+        return managers
+
     def process_payouts(self):
         self._process_payouts(HeadToHeadPayout)
-
 
     @transaction.atomic
     @FPLLeague.update_last_updated
@@ -150,7 +173,7 @@ class HeadToHeadLeague(FPLLeague):
         # TODO: Fix redundant query/iteration
         most_recent_gameweek = Gameweek.objects.filter(
             end_date__lte=datetime.date.today()
-        ).aggregate(models.Max('number'))['number__max']
+        ).aggregate(most_recent_gameweek=models.Max('number'))['most_recent_gameweek']
         completed_h2h_matches = HeadToHeadMatch.objects.filter(gameweek__number__lte=most_recent_gameweek)
         for h2h_match in completed_h2h_matches:
             h2h_match.calculate_score()

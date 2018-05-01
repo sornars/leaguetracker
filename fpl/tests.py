@@ -71,8 +71,9 @@ class ClassicLeagueTestCase(TestCase):
         self.assertEqual(League.objects.get().name, 'Test League 1')
         self.assertIsNotNone(classic_league.last_updated)
 
+    @patch('fpl.models.Gameweek.retrieve_gameweek_data')
     @patch('fpl.models.ClassicLeague.retrieve_league_data')
-    def test_process_payouts(self, _):
+    def test_process_payouts(self, mock_retrieve_league_data, mock_retrieve_gameweek_data):
         classic_league = ClassicLeague.objects.get()
         gameweek_1 = Gameweek.objects.create(number=1, start_date='2017-08-01', end_date='2017-08-02')
         gameweek_2 = Gameweek.objects.create(number=2, start_date='2017-08-08', end_date='2017-08-09')
@@ -118,6 +119,8 @@ class ClassicLeagueTestCase(TestCase):
         classic_league.process_payouts()
         self.assertEqual(ClassicPayout.objects.count(), 2)
         payout_1_processed, payout_2_processed = ClassicPayout.objects.all()
+        mock_retrieve_gameweek_data.assert_called_once()
+        mock_retrieve_league_data.assert_called_once()
         self.assertEqual(payout_1_processed.amount, 20)
         self.assertEqual(payout_1_processed.start_date,
                          datetime.datetime.strptime(payout_1.start_date, '%Y-%m-%d').date())
@@ -244,8 +247,9 @@ class HeadToHeadLeagueTestCase(TestCase):
         self.assertEqual(HeadToHeadMatch.objects.count(), 2)
         self.assertIsNotNone(h2h_league.last_updated)
 
+    @patch('fpl.models.Gameweek.retrieve_gameweek_data')
     @patch('fpl.models.HeadToHeadLeague.retrieve_league_data')
-    def test_process_payouts(self, _):
+    def test_process_payouts(self, mock_retrieve_league_data, mock_retrieve_gameweek_data):
         h2h_league = HeadToHeadLeague.objects.get()
         gameweek_1, gameweek_2, gameweek_3 = Gameweek.objects.order_by('start_date').all()
         payout_1 = HeadToHeadPayout.objects.create(
@@ -287,6 +291,9 @@ class HeadToHeadLeagueTestCase(TestCase):
         HeadToHeadPerformance.objects.create(h2h_league=h2h_league, manager=manager_3, gameweek=gameweek_3, score=15)
 
         h2h_league.process_payouts()
+
+        mock_retrieve_gameweek_data.assert_called_once()
+        mock_retrieve_league_data.assert_called_once()
         self.assertEqual(HeadToHeadPayout.objects.count(), 2)
         payout_1_processed, payout_2_processed = HeadToHeadPayout.objects.all()
         self.assertEqual(payout_1_processed.amount, 20)
@@ -416,7 +423,12 @@ class GameweekTestCase(TestCase):
 
                 "kickoff_time": "2017-08-12T11:30:00Z",
                 "event": 2
-            }
+            },
+            {
+
+                "kickoff_time": None,
+                "event": None
+            },
         ]
         gameweek_data = {
             'events': [

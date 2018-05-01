@@ -42,6 +42,7 @@ class FPLLeague(models.Model):
         raise NotImplementedError
 
     def _process_payouts(self, payout_proxy):
+        Gameweek.retrieve_gameweek_data()
         self.retrieve_league_data()
 
         most_recent_gameweek_id = Gameweek.objects.filter(
@@ -215,10 +216,11 @@ class Gameweek(models.Model):
         fixtures = fixtures_response.json()
         gameweek_end_dates = {}
         for fixture in fixtures:
-            end_date = parse_datetime(fixture['kickoff_time']) + datetime.timedelta(days=1)
-            gameweek = fixture['event']
-            if end_date >= gameweek_end_dates.get(gameweek, end_date):
-                gameweek_end_dates[gameweek] = end_date
+            if fixture['kickoff_time'] and fixture['event']:
+                end_date = parse_datetime(fixture['kickoff_time']) + datetime.timedelta(days=1)
+                gameweek = fixture['event']
+                if end_date >= gameweek_end_dates.get(gameweek, end_date):
+                    gameweek_end_dates[gameweek] = end_date
 
         response = requests.get(BASE_URL + 'bootstrap-static')
         data = response.json()

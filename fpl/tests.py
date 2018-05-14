@@ -742,10 +742,10 @@ class HeadToHeadPayoutTestCase(TestCase):
 
 class ClassicLeagueListViewTestCase(TestCase):
     def test_title(self):
-        response = self.client.get(reverse('fpl:classic-league:list'))
+        response = self.client.get(reverse('fpl:classic:list'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Classic Leagues')
-        self.assertQuerysetEqual(response.context['classic_league_list'], [])
+        self.assertQuerysetEqual(response.context['league_list'], [])
 
     def test_classic_leagues_displayed(self):
         league_1 = League.objects.create(name='Test League 1', entry_fee=10)
@@ -754,23 +754,23 @@ class ClassicLeagueListViewTestCase(TestCase):
         league_2 = League.objects.create(name='Test League 2', entry_fee=10)
         ClassicLeague.objects.create(league=league_2, fpl_league_id=2)
 
-        response = self.client.get(reverse('fpl:classic-league:list'))
+        response = self.client.get(reverse('fpl:classic:list'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Test League 1')
         self.assertContains(response, 'Test League 2')
-        self.assertQuerysetEqual(response.context['classic_league_list'].order_by('league'),
+        self.assertQuerysetEqual(response.context['league_list'].order_by('league'),
                                  ['<ClassicLeague: Test League 1>', '<ClassicLeague: Test League 2>'])
 
 
 class ClassicLeagueDetailViewTestCase(TestCase):
     def test_league_exists(self):
-        response = self.client.get(reverse('fpl:classic-league:detail', args=[1]))
+        response = self.client.get(reverse('fpl:classic:detail', args=[1]))
         self.assertEqual(response.status_code, 404)
 
     def test_title(self):
         league_1 = League.objects.create(name='Test League 1', entry_fee=10)
         classic_league = ClassicLeague.objects.create(league=league_1, fpl_league_id=1)
-        response = self.client.get(reverse('fpl:classic-league:detail', args=[classic_league.pk]))
+        response = self.client.get(reverse('fpl:classic:detail', args=[classic_league.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Classic League: Test League 1')
 
@@ -800,7 +800,7 @@ class ClassicLeagueDetailViewTestCase(TestCase):
             ManagerPerformance(manager=manager_3, gameweek=gameweek_2, score=30)
         ])
 
-        response = self.client.get(reverse('fpl:classic-league:detail', args=[classic_league.pk]))
+        response = self.client.get(reverse('fpl:classic:detail', args=[classic_league.pk]))
         self.assertQuerysetEqual(response.context['object'].managers.order_by('team_name'),
                                  ['<Manager: Team 1 - entrant_1>', '<Manager: Team 2 - entrant_2>',
                                   '<Manager: Team 3 - entrant_3>'])
@@ -856,7 +856,7 @@ class ClassicLeagueDetailViewTestCase(TestCase):
             winner=entrant_2,
             paid_out=False
         )
-        response = self.client.get(reverse('fpl:classic-league:detail', args=[classic_league.pk]))
+        response = self.client.get(reverse('fpl:classic:detail', args=[classic_league.pk]))
         self.assertQuerysetEqual(response.context['object'].league.payout_set.all().order_by('start_date'),
                                  ['<Payout: Test League - Test Payout 1 Position 1 (2017-08-01-2017-08-02): 10.00>',
                                   '<Payout: Test League - Test Payout 2 Position 2 (2017-08-08-2017-08-09): 20.00>'])
@@ -893,8 +893,167 @@ class ClassicLeagueDetailViewTestCase(TestCase):
         now = timezone.now()
         league = League.objects.create(name='Test League', entry_fee=10)
         classic_league = ClassicLeague.objects.create(league=league, fpl_league_id=1, last_updated=now)
-        response = self.client.get(reverse('fpl:classic-league:detail', args=[classic_league.pk]))
+        response = self.client.get(reverse('fpl:classic:detail', args=[classic_league.pk]))
 
         self.assertContains(response, 'Last Updated')
-        ampm = ''.join([i.lower() + '.' for i in 'PM'])
-        self.assertContains(response, now.strftime('%b. %-d, %Y, %-I:%M ' + ampm))
+        ampm = ''.join([i.lower() + '.' for i in now.strftime('%p')])
+        self.assertContains(response, now.strftime('%b %-d, %Y, %-I:%M ' + ampm))
+
+class HeadToHeadLeagueListViewTestCase(TestCase):
+    def test_title(self):
+        response = self.client.get(reverse('fpl:head-to-head:list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Head To Head Leagues')
+        self.assertQuerysetEqual(response.context['league_list'], [])
+
+    def test_head_to_head_leagues_displayed(self):
+        league_1 = League.objects.create(name='Test League 1', entry_fee=10)
+        HeadToHeadLeague.objects.create(league=league_1, fpl_league_id=1)
+
+        league_2 = League.objects.create(name='Test League 2', entry_fee=10)
+        HeadToHeadLeague.objects.create(league=league_2, fpl_league_id=2)
+
+        response = self.client.get(reverse('fpl:head-to-head:list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Test League 1')
+        self.assertContains(response, 'Test League 2')
+        self.assertQuerysetEqual(response.context['league_list'].order_by('league'),
+                                 ['<HeadToHeadLeague: Test League 1>', '<HeadToHeadLeague: Test League 2>'])
+
+
+class HeadToHeadLeagueDetailViewTestCase(TestCase):
+    def test_league_exists(self):
+        response = self.client.get(reverse('fpl:head-to-head:detail', args=[1]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_title(self):
+        league_1 = League.objects.create(name='Test League 1', entry_fee=10)
+        head_to_head_league = HeadToHeadLeague.objects.create(league=league_1, fpl_league_id=1)
+        response = self.client.get(reverse('fpl:head-to-head:detail', args=[head_to_head_league.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Head To Head League: Test League 1')
+
+    def test_entrants(self):
+        User = get_user_model()
+        entrant_1 = User.objects.create(username='entrant_1', first_name='Test', last_name='User 1')
+        entrant_2 = User.objects.create(username='entrant_2', first_name='Test', last_name='User 2')
+        entrant_3 = User.objects.create(username='entrant_3', first_name='Test', last_name='User 3')
+        league = League.objects.create(name='Test League', entry_fee=10)
+        LeagueEntrant.objects.bulk_create([
+            LeagueEntrant(entrant=entrant_1, league=league, paid_entry=False),
+            LeagueEntrant(entrant=entrant_2, league=league, paid_entry=True),
+            LeagueEntrant(entrant=entrant_3, league=league, paid_entry=True)
+        ])
+        head_to_head_league = HeadToHeadLeague.objects.create(league=league, fpl_league_id=1)
+        manager_1 = Manager.objects.create(entrant=entrant_1, team_name='Team 1', fpl_manager_id=1)
+        manager_2 = Manager.objects.create(entrant=entrant_2, team_name='Team 2', fpl_manager_id=2)
+        manager_3 = Manager.objects.create(entrant=entrant_3, team_name='Team 3', fpl_manager_id=3)
+        gameweek_1 = Gameweek.objects.create(number=1, start_date='2017-08-01', end_date='2017-08-03')
+        gameweek_2 = Gameweek.objects.create(number=2, start_date='2017-08-08', end_date='2017-08-11')
+        HeadToHeadPerformance.objects.bulk_create([
+            HeadToHeadPerformance(h2h_league=head_to_head_league, manager=manager_1, gameweek=gameweek_1, score=0),
+            HeadToHeadPerformance(h2h_league=head_to_head_league, manager=manager_2, gameweek=gameweek_1, score=1),
+            HeadToHeadPerformance(h2h_league=head_to_head_league, manager=manager_3, gameweek=gameweek_1, score=0),
+            HeadToHeadPerformance(h2h_league=head_to_head_league, manager=manager_1, gameweek=gameweek_2, score=0),
+            HeadToHeadPerformance(h2h_league=head_to_head_league, manager=manager_2, gameweek=gameweek_2, score=1),
+            HeadToHeadPerformance(h2h_league=head_to_head_league, manager=manager_3, gameweek=gameweek_2, score=3)
+        ])
+
+        response = self.client.get(reverse('fpl:head-to-head:detail', args=[head_to_head_league.pk]))
+        self.assertQuerysetEqual(sorted(response.context['object'].managers, key=lambda x: x.team_name),
+                                 ['<Manager: Team 1 - entrant_1>', '<Manager: Team 2 - entrant_2>',
+                                  '<Manager: Team 3 - entrant_3>'])
+        self.assertContains(response, 'Team')
+        self.assertContains(response, 'Manager')
+        self.assertContains(response, 'Entry Paid')
+        self.assertContains(response, 'Score')
+
+        self.assertContains(response, 'Team 1')
+        self.assertContains(response, 'Test User 1')
+        self.assertContains(response, 'False')
+        self.assertContains(response, 0)
+        self.assertContains(response, 'Team 2')
+        self.assertContains(response, 'Test User 2')
+        self.assertContains(response, 'True')
+        self.assertContains(response, 2)
+        self.assertContains(response, 'Team 3')
+        self.assertContains(response, 'Test User 3')
+        self.assertContains(response, 3)
+
+    def test_payouts(self):
+        User = get_user_model()
+        entrant_1 = User.objects.create(username='entrant_1', first_name='Test', last_name='User 1')
+        entrant_2 = User.objects.create(username='entrant_2', first_name='Test', last_name='User 2')
+        entrant_3 = User.objects.create(username='entrant_3', first_name='Test', last_name='User 3')
+        league = League.objects.create(name='Test League', entry_fee=10)
+        LeagueEntrant.objects.bulk_create([
+            LeagueEntrant(entrant=entrant_1, league=league, paid_entry=False),
+            LeagueEntrant(entrant=entrant_2, league=league, paid_entry=True),
+            LeagueEntrant(entrant=entrant_3, league=league, paid_entry=True)
+        ])
+        head_to_head_league = HeadToHeadLeague.objects.create(league=league, fpl_league_id=1)
+        gameweek_1 = Gameweek.objects.create(number=1, start_date='2017-08-01', end_date='2017-08-02')
+        gameweek_2 = Gameweek.objects.create(number=2, start_date='2017-08-08', end_date='2017-08-09')
+        gameweek_3 = Gameweek.objects.create(number=3, start_date='2017-08-15', end_date='2017-08-16')
+        payout_1 = HeadToHeadPayout.objects.create(
+            league=head_to_head_league.league,
+            name='Test Payout 1',
+            amount=10,
+            position=1,
+            start_date=gameweek_1.start_date,
+            end_date=gameweek_1.end_date,
+            winner=entrant_1,
+            paid_out=True
+        )
+        payout_2 = HeadToHeadPayout.objects.create(
+            league=head_to_head_league.league,
+            name='Test Payout 2',
+            amount=20,
+            position=2,
+            start_date=gameweek_2.start_date,
+            end_date=gameweek_2.end_date,
+            winner=entrant_2,
+            paid_out=False
+        )
+        response = self.client.get(reverse('fpl:head-to-head:detail', args=[head_to_head_league.pk]))
+        self.assertQuerysetEqual(response.context['object'].league.payout_set.all().order_by('start_date'),
+                                 ['<Payout: Test League - Test Payout 1 Position 1 (2017-08-01-2017-08-02): 10.00>',
+                                  '<Payout: Test League - Test Payout 2 Position 2 (2017-08-08-2017-08-09): 20.00>'])
+
+        self.assertContains(response, 'Name')
+        self.assertContains(response, 'Position')
+        self.assertContains(response, 'Start Date')
+        self.assertContains(response, 'End Date')
+        self.assertContains(response, 'Amount')
+        self.assertContains(response, 'Winner')
+        self.assertContains(response, 'Paid Out')
+
+        self.assertContains(response, 'Test Payout 1')
+        self.assertContains(response, '1')
+        self.assertContains(response,
+                            datetime.datetime.strptime(gameweek_1.start_date, '%Y-%m-%d').strftime('%b. %-d, %Y'))
+        self.assertContains(response,
+                            datetime.datetime.strptime(gameweek_1.end_date, '%Y-%m-%d').strftime('%b. %-d, %Y'))
+        self.assertContains(response, '10.00')
+        self.assertContains(response, 'Test User 1')
+        self.assertContains(response, 'True')
+
+        self.assertContains(response, 'Test Payout 2')
+        self.assertContains(response, '1')
+        self.assertContains(response,
+                            datetime.datetime.strptime(gameweek_2.start_date, '%Y-%m-%d').strftime('%b. %-d, %Y'))
+        self.assertContains(response,
+                            datetime.datetime.strptime(gameweek_2.end_date, '%Y-%m-%d').strftime('%b. %-d, %Y'))
+        self.assertContains(response, '20.00')
+        self.assertContains(response, 'Test User 2')
+        self.assertContains(response, 'False')
+
+    def test_last_updated(self):
+        now = timezone.now()
+        league = League.objects.create(name='Test League', entry_fee=10)
+        head_to_head_league = HeadToHeadLeague.objects.create(league=league, fpl_league_id=1, last_updated=now)
+        response = self.client.get(reverse('fpl:head-to-head:detail', args=[head_to_head_league.pk]))
+
+        self.assertContains(response, 'Last Updated')
+        ampm = ''.join([i.lower() + '.' for i in now.strftime('%p')])
+        self.assertContains(response, now.strftime('%b %-d, %Y, %-I:%M ' + ampm))

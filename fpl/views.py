@@ -14,8 +14,8 @@ class ClassicLeagueListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['league_type'] = 'Classic League'
-        context['base_url'] = 'fpl:classic-league:detail'
+        context['league_type'] = 'Classic Leagues'
+        context['base_url'] = 'fpl:classic:detail'
         return context
 
 class HeadToHeadLeagueListView(ListView):
@@ -25,7 +25,7 @@ class HeadToHeadLeagueListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['league_type'] = 'Head To Head League'
+        context['league_type'] = 'Head To Head Leagues'
         context['base_url'] = 'fpl:head-to-head:detail'
         return context
 
@@ -33,19 +33,43 @@ class HeadToHeadLeagueListView(ListView):
 class ClassicLeagueDetailView(DetailView):
     model = ClassicLeague
     context_object_name = 'league'
+    template_name = 'fpl/league_detail.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['league_type'] = 'Classic League'
+        context['base_url'] = 'fpl:classic:process-payouts'
+        return context
+
 
 class HeadToHeadLeagueDetailView(DetailView):
-    model = ClassicLeague
+    model = HeadToHeadLeague
     context_object_name = 'league'
+    template_name = 'fpl/league_detail.html'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['league_type'] = 'Head To Head League'
+        context['base_url'] = 'fpl:head-to-head:process-payouts'
+        return context
 
-class ClassicLeagueRefreshView(RedirectView):
+class LeagueRefreshView(RedirectView):
     permanent = False
     http_method_names = ['post']
+    league_type = None
+    base_url = ''
 
     def get_redirect_url(self, *args, **kwargs):
-        classic_league_id = kwargs['pk']
-        classic_league = get_object_or_404(ClassicLeague, pk=classic_league_id)
-        if timezone.timedelta(hours=1) < timezone.now() - classic_league.last_updated:
-            classic_league.process_payouts()
-        return reverse('fpl:classic-league:detail', args=[classic_league_id])
+        league_id = kwargs['pk']
+        league = get_object_or_404(self.league_type, pk=league_id)
+        if timezone.timedelta(hours=1) < timezone.now() - league.last_updated:
+            league.process_payouts()
+        return reverse(self.base_url, args=[league_id])
+
+class ClassicLeagueRefreshView(LeagueRefreshView):
+    league_type = ClassicLeague
+    base_url = 'fpl:classic:detail'
+
+class HeadToHeadLeagueRefreshView(LeagueRefreshView):
+    league_type = HeadToHeadLeague
+    base_url = 'fpl:head-to-head:detail'

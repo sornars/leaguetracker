@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h2>Classic League: {{ classic_league.league.name }}</h2>
+    <h2>{{ league_type }}: {{ league.league.name }}</h2>
     <table>
         <thead>
         <tr>
@@ -12,7 +12,7 @@
         </tr>
         </thead>
         <tbody>
-        {% for manager in classic_league.managers %}
+        {% for manager in league.managers %}
             <tr>
 
                 <td>
@@ -41,7 +41,7 @@
         </tr>
         </thead>
         <tbody>
-        {% for payout in classic_league.league.payout_set.all|dictsort:"position"|dictsort:"start_date"|dictsort:"name" %}
+        {% for payout in league.league.payout_set.all|dictsort:"position"|dictsort:"start_date"|dictsort:"name" %}
             <tr>
                 <td>{{ payout.name }}</td>
                 <td>{{ payout.position }}</td>
@@ -55,8 +55,8 @@
         </tbody>
     </table>
 
-    <h3>Last Updated: {{ classic_league.last_updated }}</h3>
-    <form action="{% url 'fpl:classic-league:process-payouts' classic_league.pk %}" method="post">
+    <h3>Last Updated: {{ league.last_updated }}</h3>
+    <form action="{% url base_url league.pk %}" method="post">
         {% csrf_token %}
         <input type="submit" value="Refresh League Data and Process Payouts"/>
     </form>

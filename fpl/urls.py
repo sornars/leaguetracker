@@ -8,11 +8,13 @@ classic_league_patterns = ([
                                path('<int:pk>/', views.ClassicLeagueDetailView.as_view(), name='detail'),
                                path('<int:pk>/process-payouts', views.ClassicLeagueRefreshView.as_view(),
                                     name='process-payouts')
-                           ], 'classic-league')
+                           ], 'classic')
 
 head_to_head_league_patterns = ([
                                     path('', views.HeadToHeadLeagueListView.as_view(), name='list'),
                                     path('<int:pk>/', views.HeadToHeadLeagueDetailView.as_view(), name='detail'),
+                                    path('<int:pk>/process-payouts', views.HeadToHeadLeagueRefreshView.as_view(),
+                                         name='process-payouts')
                                 ], 'head-to-head')
 
 urlpatterns = [

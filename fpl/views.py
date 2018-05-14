@@ -4,17 +4,39 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import ListView, DetailView, RedirectView
 
-from fpl.models import ClassicLeague
+from fpl.models import ClassicLeague, HeadToHeadLeague
 
 
 class ClassicLeagueListView(ListView):
     model = ClassicLeague
-    context_object_name = 'classic_league_list'
+    context_object_name = 'league_list'
+    template_name = 'fpl/league_list.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['league_type'] = 'Classic League'
+        context['base_url'] = 'fpl:classic-league:detail'
+        return context
+
+class HeadToHeadLeagueListView(ListView):
+    model = HeadToHeadLeague
+    context_object_name = 'league_list'
+    template_name = 'fpl/league_list.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['league_type'] = 'Head To Head League'
+        context['base_url'] = 'fpl:head-to-head:detail'
+        return context
 
 
 class ClassicLeagueDetailView(DetailView):
     model = ClassicLeague
-    context_object_name = 'classic_league'
+    context_object_name = 'league'
+
+class HeadToHeadLeagueDetailView(DetailView):
+    model = ClassicLeague
+    context_object_name = 'league'
 
 
 class ClassicLeagueRefreshView(RedirectView):

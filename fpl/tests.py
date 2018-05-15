@@ -157,6 +157,74 @@ class ClassicLeagueTestCase(TestCase):
         self.assertTrue(classic_league.managers[1].paid_entry)
         self.assertTrue(classic_league.managers[2].paid_entry)
 
+    @patch('fpl.models.Gameweek.retrieve_gameweek_data')
+    @patch('fpl.models.ClassicLeague.retrieve_league_data')
+    def test_process_payouts_does_not_retrieve_league_data_after_last_gameeweek(self, mock_retrieve_league_data, mock_retrieve_gameweek_data):
+        classic_league = ClassicLeague.objects.get()
+        gameweek_1 = Gameweek.objects.create(number=1, start_date='2017-08-01', end_date='2017-08-02')
+        gameweek_2 = Gameweek.objects.create(number=2, start_date='2017-08-08', end_date='2017-08-09')
+        gameweek_3 = Gameweek.objects.create(number=3, start_date='2017-08-15', end_date='2017-08-16')
+        payout_1 = ClassicPayout.objects.create(
+            league=classic_league.league,
+            name='Test Payout',
+            amount=10,
+            position=1,
+            start_date=gameweek_1.start_date,
+            end_date=gameweek_1.end_date,
+            paid_out=False
+        )
+        payout_2 = ClassicPayout.objects.create(
+            league=classic_league.league,
+            name='Test Payout',
+            amount=10,
+            position=1,
+            start_date=gameweek_2.start_date,
+            end_date=gameweek_2.end_date,
+            paid_out=False
+        )
+        payout_3 = ClassicPayout.objects.create(
+            league=classic_league.league,
+            name='Test Payout',
+            amount=10,
+            position=1,
+            start_date=gameweek_3.start_date,
+            end_date=gameweek_3.end_date,
+            paid_out=False
+        )
+        manager_1, manager_2, manager_3 = Manager.objects.all()
+        ManagerPerformance.objects.create(manager=manager_1, gameweek=gameweek_1, score=0)
+        ManagerPerformance.objects.create(manager=manager_1, gameweek=gameweek_2, score=0)
+        ManagerPerformance.objects.create(manager=manager_1, gameweek=gameweek_3, score=10)
+        ManagerPerformance.objects.create(manager=manager_2, gameweek=gameweek_1, score=0)
+        ManagerPerformance.objects.create(manager=manager_2, gameweek=gameweek_2, score=10)
+        ManagerPerformance.objects.create(manager=manager_2, gameweek=gameweek_3, score=10)
+        ManagerPerformance.objects.create(manager=manager_3, gameweek=gameweek_1, score=0)
+        ManagerPerformance.objects.create(manager=manager_3, gameweek=gameweek_2, score=20)
+        ManagerPerformance.objects.create(manager=manager_3, gameweek=gameweek_3, score=15)
+
+        classic_league.process_payouts()
+
+        mock_retrieve_gameweek_data.assert_called_once()
+        mock_retrieve_league_data.assert_called_once()
+
+        classic_league.last_updated = timezone.make_aware(datetime.datetime(2017, 8, 30))
+        classic_league.save()
+        mock_retrieve_gameweek_data.reset_mock()
+        mock_retrieve_league_data.reset_mock()
+        classic_league.process_payouts()
+
+        mock_retrieve_gameweek_data.assert_called_once()
+        mock_retrieve_league_data.assert_called_once()
+
+        classic_league.last_updated = timezone.make_aware(datetime.datetime(2017, 8, 31))
+        classic_league.save()
+        mock_retrieve_gameweek_data.reset_mock()
+        mock_retrieve_league_data.reset_mock()
+        classic_league.process_payouts()
+
+        mock_retrieve_gameweek_data.assert_not_called()
+        mock_retrieve_league_data.assert_not_called()
+
 
 class HeadToHeadLeagueTestCase(TestCase):
 
@@ -329,6 +397,72 @@ class HeadToHeadLeagueTestCase(TestCase):
         self.assertTrue(h2h_league.managers[0].paid_entry)
         self.assertTrue(h2h_league.managers[1].paid_entry)
         self.assertTrue(h2h_league.managers[2].paid_entry)
+
+    @patch('fpl.models.Gameweek.retrieve_gameweek_data')
+    @patch('fpl.models.HeadToHeadLeague.retrieve_league_data')
+    def test_process_payouts_does_not_retrieve_league_data_after_last_gameeweek(self, mock_retrieve_league_data, mock_retrieve_gameweek_data):
+        h2h_league = HeadToHeadLeague.objects.get()
+        gameweek_1, gameweek_2, gameweek_3 = Gameweek.objects.order_by('start_date').all()
+        payout_1 = HeadToHeadPayout.objects.create(
+            league=h2h_league.league,
+            name='Test Payout',
+            amount=10,
+            position=1,
+            start_date=gameweek_1.start_date,
+            end_date=gameweek_1.end_date,
+            paid_out=False
+        )
+        payout_2 = HeadToHeadPayout.objects.create(
+            league=h2h_league.league,
+            name='Test Payout',
+            amount=10,
+            position=1,
+            start_date=gameweek_2.start_date,
+            end_date=gameweek_2.end_date,
+            paid_out=False
+        )
+        payout_3 = HeadToHeadPayout.objects.create(
+            league=h2h_league.league,
+            name='Test Payout',
+            amount=10,
+            position=1,
+            start_date=gameweek_3.start_date,
+            end_date=gameweek_3.end_date,
+            paid_out=False
+        )
+        manager_1, manager_2, manager_3 = Manager.objects.all()
+        HeadToHeadPerformance.objects.create(h2h_league=h2h_league, manager=manager_1, gameweek=gameweek_1, score=0)
+        HeadToHeadPerformance.objects.create(h2h_league=h2h_league, manager=manager_1, gameweek=gameweek_2, score=0)
+        HeadToHeadPerformance.objects.create(h2h_league=h2h_league, manager=manager_1, gameweek=gameweek_3, score=10)
+        HeadToHeadPerformance.objects.create(h2h_league=h2h_league, manager=manager_2, gameweek=gameweek_1, score=0)
+        HeadToHeadPerformance.objects.create(h2h_league=h2h_league, manager=manager_2, gameweek=gameweek_2, score=10)
+        HeadToHeadPerformance.objects.create(h2h_league=h2h_league, manager=manager_2, gameweek=gameweek_3, score=10)
+        HeadToHeadPerformance.objects.create(h2h_league=h2h_league, manager=manager_3, gameweek=gameweek_1, score=0)
+        HeadToHeadPerformance.objects.create(h2h_league=h2h_league, manager=manager_3, gameweek=gameweek_2, score=20)
+        HeadToHeadPerformance.objects.create(h2h_league=h2h_league, manager=manager_3, gameweek=gameweek_3, score=15)
+
+        h2h_league.process_payouts()
+
+        mock_retrieve_gameweek_data.assert_called_once()
+        mock_retrieve_league_data.assert_called_once()
+
+        h2h_league.last_updated = timezone.make_aware(datetime.datetime(2017, 8, 30))
+        h2h_league.save()
+        mock_retrieve_gameweek_data.reset_mock()
+        mock_retrieve_league_data.reset_mock()
+        h2h_league.process_payouts()
+
+        mock_retrieve_gameweek_data.assert_called_once()
+        mock_retrieve_league_data.assert_called_once()
+
+        h2h_league.last_updated = timezone.make_aware(datetime.datetime(2017, 8, 31))
+        h2h_league.save()
+        mock_retrieve_gameweek_data.reset_mock()
+        mock_retrieve_league_data.reset_mock()
+        h2h_league.process_payouts()
+
+        mock_retrieve_gameweek_data.assert_not_called()
+        mock_retrieve_league_data.assert_not_called()
 
 
 class HeadToHeadMatchTestCase(TestCase):

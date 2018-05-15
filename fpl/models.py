@@ -5,7 +5,7 @@ import itertools
 import requests
 from django.conf import settings
 from django.db import models, transaction
-from django.db.models import Sum, F
+from django.db.models import Sum, F, Max
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
@@ -42,8 +42,10 @@ class FPLLeague(models.Model):
         raise NotImplementedError
 
     def _process_payouts(self, payout_proxy):
-        Gameweek.retrieve_gameweek_data()
-        self.retrieve_league_data()
+        final_gameday = Gameweek.objects.all().aggregate(final_gameday= Max('end_date'))['final_gameday']
+        if self.last_updated is None or self.last_updated.date() <= final_gameday + datetime.timedelta(days=14):
+            Gameweek.retrieve_gameweek_data()
+            self.retrieve_league_data()
 
         most_recent_gameweek_id = Gameweek.objects.filter(
             end_date__lte=datetime.date.today()

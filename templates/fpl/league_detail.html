@@ -9,6 +9,9 @@
             <th>Manager</th>
             <th>Entry Paid</th>
             <th>Score</th>
+            {% if league_type == 'Head To Head League' %}
+                <th>Head To Head Score</th>
+            {% endif %}
         </tr>
         </thead>
         <tbody>
@@ -23,6 +26,9 @@
                 </td>
                 <td>{{ manager.paid_entry }}</td>
                 <td>{{ manager.current_score }}</td>
+                {% if league_type == 'Head To Head League' %}
+                    <td>{{ manager.current_h2h_score }}</td>
+                {% endif %}
             </tr>
         {% endfor %}
         </tbody>
@@ -60,5 +66,4 @@
         {% csrf_token %}
         <input type="submit" value="Refresh League Data and Process Payouts"/>
     </form>
-
 {% endblock %}

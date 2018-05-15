@@ -808,6 +808,7 @@ class ClassicLeagueDetailViewTestCase(TestCase):
         self.assertContains(response, 'Manager')
         self.assertContains(response, 'Entry Paid')
         self.assertContains(response, 'Score')
+        self.assertNotContains(response, 'Head To Head Score')
 
         self.assertContains(response, 'Team 1')
         self.assertContains(response, 'Test User 1')
@@ -933,6 +934,7 @@ class HeadToHeadLeagueDetailViewTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Head To Head League: Test League 1')
 
+
     def test_entrants(self):
         User = get_user_model()
         entrant_1 = User.objects.create(username='entrant_1', first_name='Test', last_name='User 1')
@@ -967,6 +969,7 @@ class HeadToHeadLeagueDetailViewTestCase(TestCase):
         self.assertContains(response, 'Manager')
         self.assertContains(response, 'Entry Paid')
         self.assertContains(response, 'Score')
+        self.assertContains(response, 'Head To Head Score')
 
         self.assertContains(response, 'Team 1')
         self.assertContains(response, 'Test User 1')

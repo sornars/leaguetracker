@@ -3,6 +3,7 @@ from django.db import models
 
 
 class League(models.Model):
+    season = models.ForeignKey('Season', on_delete=models.CASCADE)
     name = models.CharField(max_length=50)
     entrants = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, through='LeagueEntrant')
     entry_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0)
@@ -51,3 +52,14 @@ class Payout(models.Model):
 
     class Meta:
         unique_together = ('league', 'position', 'start_date', 'end_date', 'winner')
+
+
+class Season(models.Model):
+    start_date = models.DateField()
+    end_date = models.DateField()
+
+    def __str__(self):
+        return '{start_date} - {end_date}'.format(
+            start_date=self.start_date,
+            end_date=self.end_date
+        )

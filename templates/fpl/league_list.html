@@ -1,14 +1,14 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h2>{{ league_type }}</h2>
-    <ul>
-        {% for league in league_list %}
-            <li>
-                <a href="{% url base_url league.pk %}">
+    <div class="container">
+        <h2>{{ league_type }}</h2>
+        <div class="list-group">
+            {% for league in league_list %}
+                <a href="{% url base_url league.pk %}" class="list-group-item list-group-item-action">
                     {{ league.league.name }}
                 </a>
-            </li>
-        {% endfor %}
-    </ul>
+            {% endfor %}
+        </div>
+    </div>
 {% endblock %}

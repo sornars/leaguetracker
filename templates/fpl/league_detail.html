@@ -1,69 +1,73 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h2>{{ league_type }}: {{ league.league.name }}</h2>
-    <table>
-        <thead>
-        <tr>
-            <th>Team</th>
-            <th>Manager</th>
-            <th>Entry Paid</th>
-            <th>Score</th>
-            {% if league_type == 'Head To Head League' %}
-                <th>Head To Head Score</th>
-            {% endif %}
-        </tr>
-        </thead>
-        <tbody>
-        {% for manager in league.managers %}
+    <div class="container">
+        <h2>{{ league_type }}: {{ league.league.name }}</h2>
+        <h3>Standings</h3>
+        <table class="table table-sm table-striped table-bordered table-hover">
+            <thead class="thead-dark">
             <tr>
-
-                <td>
-                    <a href="https://fantasy.premierleague.com/a/team/{{ manager.fpl_manager_id }}">{{ manager.team_name }}</a>
-                </td>
-                <td>
-                    {{ manager.entrant.first_name }} {{ manager.entrant.last_name }}
-                </td>
-                <td>{{ manager.paid_entry }}</td>
-                <td>{{ manager.current_score }}</td>
+                <th>Team</th>
+                <th>Manager</th>
+                <th>Entry Paid</th>
+                <th>Score</th>
                 {% if league_type == 'Head To Head League' %}
-                    <td>{{ manager.current_h2h_score }}</td>
+                    <th>Head To Head Score</th>
                 {% endif %}
             </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    <h3>Payouts: </h3>
-    <table>
-        <thead>
-        <tr>
-            <th>Name</th>
-            <th>Position</th>
-            <th>Start Date</th>
-            <th>End Date</th>
-            <th>Amount</th>
-            <th>Winner</th>
-            <th>Paid Out</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for payout in league.league.payout_set.all|dictsort:"position"|dictsort:"start_date"|dictsort:"name" %}
-            <tr>
-                <td>{{ payout.name }}</td>
-                <td>{{ payout.position }}</td>
-                <td>{{ payout.start_date }}</td>
-                <td>{{ payout.end_date }}</td>
-                <td>{{ payout.amount }}</td>
-                <td>{{ payout.winner.first_name }} {{ payout.winner.last_name }}</td>
-                <td>{{ payout.paid_out }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+            {% for manager in league.managers %}
+                <tr>
 
-    <h3>Last Updated: {{ league.last_updated }}</h3>
-    <form action="{% url base_url league.pk %}" method="post">
-        {% csrf_token %}
-        <input type="submit" value="Refresh League Data and Process Payouts"/>
-    </form>
+                    <td>
+                        <a href="https://fantasy.premierleague.com/a/team/{{ manager.fpl_manager_id }}">{{ manager.team_name }}</a>
+                    </td>
+                    <td>
+                        {{ manager.entrant.first_name }} {{ manager.entrant.last_name }}
+                    </td>
+                    <td>{{ manager.paid_entry }}</td>
+                    <td>{{ manager.current_score }}</td>
+                    {% if league_type == 'Head To Head League' %}
+                        <td>{{ manager.current_h2h_score }}</td>
+                    {% endif %}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <h3>Payouts</h3>
+        <table class="table table-sm table-striped table-bordered table-hover">
+            <thead class="thead-dark">
+            <tr>
+                <th>Name</th>
+                <th>Position</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Amount</th>
+                <th>Winner</th>
+                <th>Paid Out</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for payout in league.league.payout_set.all|dictsort:"position"|dictsort:"start_date"|dictsort:"name" %}
+                <tr>
+                    <td>{{ payout.name }}</td>
+                    <td>{{ payout.position }}</td>
+                    <td>{{ payout.start_date }}</td>
+                    <td>{{ payout.end_date }}</td>
+                    <td>{{ payout.amount }}</td>
+                    <td>{{ payout.winner.first_name }} {{ payout.winner.last_name }}</td>
+                    <td>{{ payout.paid_out }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <h3 class="row justify-content-center">Last Updated: {{ league.last_updated }}</h3>
+        <form action="{% url base_url league.pk %}" method="post" class="row justify-content-center">
+            {% csrf_token %}
+            <input type="submit" class="btn btn-outline-info" value="Refresh League Data and Process Payouts"/>
+        </form>
+
+    </div>
 {% endblock %}

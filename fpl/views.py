@@ -16,7 +16,14 @@ class ClassicLeagueListView(ListView):
         context = super().get_context_data(**kwargs)
         context['league_type'] = 'Classic Leagues'
         context['base_url'] = 'fpl:classic:detail'
+        context['navbar_levels'] = [
+            {
+                'name': 'Classic Leagues',
+                'href': reverse('fpl:classic:list')
+            }
+        ]
         return context
+
 
 class HeadToHeadLeagueListView(ListView):
     model = HeadToHeadLeague
@@ -27,6 +34,12 @@ class HeadToHeadLeagueListView(ListView):
         context = super().get_context_data(**kwargs)
         context['league_type'] = 'Head To Head Leagues'
         context['base_url'] = 'fpl:head-to-head:detail'
+        context['navbar_levels'] = [
+            {
+                'name': 'Head To Head Leagues',
+                'href': reverse('fpl:head-to-head:list')
+            }
+        ]
         return context
 
 
@@ -39,6 +52,16 @@ class ClassicLeagueDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         context['league_type'] = 'Classic League'
         context['base_url'] = 'fpl:classic:process-payouts'
+        context['navbar_levels'] = [
+            {
+                'name': 'Classic Leagues',
+                'href': reverse('fpl:classic:list')
+            },
+            {
+                'name': kwargs['object'].league.name,
+                'href': reverse('fpl:classic:detail', args=[kwargs['object'].pk])
+            }
+        ]
         return context
 
 
@@ -51,7 +74,18 @@ class HeadToHeadLeagueDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         context['league_type'] = 'Head To Head League'
         context['base_url'] = 'fpl:head-to-head:process-payouts'
+        context['navbar_levels'] = [
+            {
+                'name': 'Head To Head Leagues',
+                'href': reverse('fpl:head-to-head:list')
+            },
+            {
+                'name': kwargs['object'].league.name,
+                'href': reverse('fpl:head-to-head:detail', args=[kwargs['object'].pk])
+            }
+        ]
         return context
+
 
 class LeagueRefreshView(RedirectView):
     permanent = False
@@ -66,9 +100,11 @@ class LeagueRefreshView(RedirectView):
             league.process_payouts()
         return reverse(self.base_url, args=[league_id])
 
+
 class ClassicLeagueRefreshView(LeagueRefreshView):
     league_type = ClassicLeague
     base_url = 'fpl:classic:detail'
+
 
 class HeadToHeadLeagueRefreshView(LeagueRefreshView):
     league_type = HeadToHeadLeague

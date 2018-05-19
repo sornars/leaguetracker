@@ -1,0 +1,9 @@
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        {% for navbar_level in navbar_levels %}
+            <li class="breadcrumb-item {% if forloop.last %}active{% endif %}">
+                <a {% if not forloop.last %} href={{ navbar_level.href }} {% endif %}>{{ navbar_level.name }}</a>
+            </li>
+        {% endfor %}
+    </ol>
+</nav>

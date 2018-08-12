@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    {% include 'fpl/navbar.html' %}
+    <div class="container">
+        <h2>Seasons</h2>
+        <div class="list-group">
+            {% for season in season_list %}
+                <a href="{% url base_url season.pk %}" class="list-group-item list-group-item-action">
+                    {{ season }}
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+{% endblock %}

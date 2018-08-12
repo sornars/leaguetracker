@@ -9,7 +9,7 @@ class League(models.Model):
     entry_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0)
 
     def __str__(self):
-        return self.name
+        return '({season}) - {name}'.format(season=self.season, name=self.name)
 
 
 class LeagueEntrant(models.Model):
@@ -63,3 +63,6 @@ class Season(models.Model):
             start_date=self.start_date,
             end_date=self.end_date
         )
+
+    class Meta:
+        unique_together = ('start_date', 'end_date')

@@ -65,7 +65,7 @@
         </table>
 
         <h3 class="row justify-content-center">Last Updated: {{ league.last_updated }}</h3>
-        <form action="{% url base_url league.pk %}" method="post" class="row justify-content-center">
+        <form action="{% url base_url league.league.season.pk league.pk %}" method="post" class="row justify-content-center">
             {% csrf_token %}
             <input type="submit" class="btn btn-outline-info" value="Refresh League Data and Process Payouts"/>
         </form>

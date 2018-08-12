@@ -5,7 +5,7 @@ import decimal
 import requests
 from django.conf import settings
 from django.db import models, transaction
-from django.db.models import Sum, F, Max
+from django.db.models import Sum, F, Max, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
@@ -16,13 +16,15 @@ BASE_URL = 'https://fantasy.premierleague.com/drf/'
 
 class FPLLeague(models.Model):
     league = models.OneToOneField(League, on_delete=models.CASCADE)
-    fpl_league_id = models.IntegerField(unique=True)
-    last_updated = models.DateTimeField(null=True)
+    fpl_league_id = models.IntegerField()
+    last_updated = models.DateTimeField(null=True, blank=True, editable=False)
 
     @property
     def managers(self):
+        # TODO: Add tests for season scores
         managers = Manager.objects.filter(
-            entrant__leagueentrant__league=self.league
+            entrant__leagueentrant__league=self.league,
+            season=self.league.season
         ).annotate(current_score=Sum('managerperformance__score'),
                    paid_entry=F('entrant__leagueentrant__paid_entry')).order_by('-current_score')
 
@@ -77,7 +79,7 @@ class FPLLeague(models.Model):
         return session
 
     def __str__(self):
-        return self.league.name
+        return str(self.league)
 
     class Meta:
         abstract = True
@@ -99,6 +101,7 @@ class ClassicLeague(FPLLeague):
         self.league.save()
         for manager in data['standings']['results']:
             manager, _ = Manager.objects.update_or_create(
+                season=self.league.season,
                 fpl_manager_id=manager['entry'],
                 defaults={
                     'team_name': manager['entry_name']
@@ -111,6 +114,7 @@ class HeadToHeadLeague(FPLLeague):
 
     @property
     def managers(self):
+        # TODO: Add tests for season scores
         managers = super().managers
         # Can't use annotate again due to https://code.djangoproject.com/ticket/10060
         for manager in managers:
@@ -154,16 +158,32 @@ class HeadToHeadLeague(FPLLeague):
         self.league.save()
         for manager in data['league-entries']:
             manager, _ = Manager.objects.update_or_create(
+                season=self.league.season,
                 fpl_manager_id=manager['entry'],
                 defaults={
                     'team_name': manager['entry_name']
                 }
             )
             manager.retrieve_performance_data(self.league.season)
+        if len(data['league-entries']) % 2 != 0:
+            average_manager_id = -1 * int(self.fpl_league_id) # Unique ID needed for each league with an AVERAGE manager
+            manager, _ = Manager.objects.update_or_create(
+                season=self.league.season,
+                fpl_manager_id=average_manager_id,
+                defaults={
+                    'team_name': 'AVERAGE'
+                }
+            )
 
         for match in data['matches']['results']:
-            manager_1 = Manager.objects.get(fpl_manager_id=match['entry_1_entry'])
-            manager_2 = Manager.objects.get(fpl_manager_id=match['entry_2_entry'])
+            manager_1_id = match['entry_1_entry']
+            if manager_1_id is None and match['entry_1_name'] == 'AVERAGE':
+                manager_1_id = average_manager_id
+            manager_2_id = match['entry_2_entry']
+            if manager_2_id is None and match['entry_2_name'] == 'AVERAGE':
+                manager_2_id = average_manager_id
+            manager_1 = Manager.objects.get(fpl_manager_id=manager_1_id)
+            manager_2 = Manager.objects.get(fpl_manager_id=manager_2_id)
             h2h_match, _ = HeadToHeadMatch.objects.update_or_create(
                 fpl_match_id=match['id'],
                 h2h_league=self,
@@ -181,15 +201,17 @@ class HeadToHeadLeague(FPLLeague):
             season=self.league.season,
             end_date__lte=datetime.date.today()
         ).aggregate(most_recent_gameweek=models.Max('number'))['most_recent_gameweek']
-        completed_h2h_matches = HeadToHeadMatch.objects.filter(gameweek__number__lte=most_recent_gameweek)
+        completed_h2h_matches = HeadToHeadMatch.objects.filter(h2h_league__league__season=self.league.season,
+                                                               gameweek__number__lte=most_recent_gameweek)
         for h2h_match in completed_h2h_matches:
             h2h_match.calculate_score()
 
 
 class Manager(models.Model):
-    entrant = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
+    entrant = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
+    season = models.ForeignKey(Season, on_delete=models.CASCADE)
     team_name = models.CharField(max_length=50)
-    fpl_manager_id = models.IntegerField(unique=True)
+    fpl_manager_id = models.IntegerField()
 
     def retrieve_performance_data(self, season):
         if datetime.date.today() < season.end_date + datetime.timedelta(days=14):
@@ -211,10 +233,13 @@ class Manager(models.Model):
     def __str__(self):
         return '{team_name} - {entrant}'.format(team_name=self.team_name, entrant=self.entrant)
 
+    class Meta:
+        unique_together = ('season', 'fpl_manager_id')
+
 
 class Gameweek(models.Model):
     season = models.ForeignKey(Season, on_delete=models.CASCADE)
-    number = models.IntegerField(unique=True)
+    number = models.IntegerField()
     start_date = models.DateField()
     end_date = models.DateField()
 
